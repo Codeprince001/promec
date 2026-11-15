@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { money } from '../../common/money';
@@ -30,5 +30,12 @@ export class PromotionsController {
   @Permissions('promotions.manage')
   create(@Body({ schema: createSchema }) body: z.infer<typeof createSchema>) {
     return this.promotions.create(body);
+  }
+
+  @Patch(':id')
+  @Permissions('promotions.manage')
+  async update(@Param('id') id: string, @Body({ schema: z.object({ active: z.boolean() }) }) body: { active: boolean }) {
+    const row = await this.promotions.update(id, body.active);
+    return { ...row, amount: money(row.amount), minSpend: money(row.minSpend) };
   }
 }

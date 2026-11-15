@@ -46,10 +46,14 @@ export class CatalogueService {
     return this.prisma.category.findMany({ orderBy: [{ path: 'asc' }, { sortOrder: 'asc' }] });
   }
 
-  async list(query: { page: number; pageSize: number; category?: string; q?: string }) {
+  adminList(query: { page: number; pageSize: number; q?: string; status?: string }) {
+    return this.list({ ...query, includeDrafts: true });
+  }
+
+  async list(query: { page: number; pageSize: number; category?: string; q?: string; includeDrafts?: boolean; status?: string }) {
     const where: Prisma.ProductWhereInput = {
-      status: 'published',
       deletedAt: null,
+      ...(query.includeDrafts ? (query.status ? { status: query.status as never } : {}) : { status: 'published' }),
       ...(query.category ? { category: { slug: query.category } } : {}),
       ...(query.q
         ? {
@@ -181,6 +185,78 @@ export class CatalogueService {
     });
     return presentProduct(product);
   }
+
+  async addMedia(productId: string, url: string, alt: string | undefined, actorId: string) {
+    if (!url.startsWith('https://')) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'Photo URL must use https');
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Product was not found');
+    const media = await this.prisma.productMedia.create({ data: { productId, url, alt } });
+    await this.audit.log({ actorId, action: 'product.media', entityType: 'product', entityId: productId, after: { url } });
+    return media;
+  }
+
+  async addCrossReference(productId: string, fromNumber: string, toNumber: string, relation: string) {
+    const from = await this.partOnProduct(productId, fromNumber);
+    const to = await this.prisma.partNumber.findFirst({ where: { normalized: normalizePartNumber(toNumber) } });
+    if (!to) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'The replacement part number is not in the catalogue');
+    if (from.id === to.id) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'A part cannot cross-reference itself');
+    return this.prisma.partCrossReference.create({ data: { fromPartNumberId: from.id, toPartNumberId: to.id, relation } });
+  }
+
+  async importCsv(csv: string, actorId: string) {
+    const rows = parseCsv(csv);
+    if (!rows.length) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'The CSV has no product rows');
+    const prepared: z.infer<typeof productWriteSchema>[] = [];
+    const errors: string[] = [];
+    for (const [index, row] of rows.entries()) {
+      const manufacturer = await this.prisma.manufacturer.findFirst({ where: { name: { equals: row.manufacturerName, mode: 'insensitive' } } });
+      const category = await this.prisma.category.findUnique({ where: { slug: row.categorySlug } });
+      if (!manufacturer || !category) {
+        errors.push(`Row ${index + 2}: unknown manufacturer or category`);
+        continue;
+      }
+      const price = Number(row.sellingPrice);
+      const stock = Number(row.stockQty || 0);
+      if (!row.name || !Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 0) {
+        errors.push(`Row ${index + 2}: name, selling price, and stock quantity are required`);
+        continue;
+      }
+      prepared.push({
+        name: row.name,
+        manufacturerId: manufacturer.id,
+        categoryId: category.id,
+        sellingPrice: price,
+        stockQty: stock,
+        weightG: 0,
+        condition: 'new',
+        warrantyMonths: 0,
+        status: 'draft',
+        partNumbers: row.partNumber ? [{ number: row.partNumber, type: row.partType === 'OEM' || row.partType === 'MPN' ? row.partType : 'AFTERMARKET' }] : [],
+      });
+    }
+    if (errors.length) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'The CSV was not imported', errors);
+    const created = [];
+    for (const row of prepared) created.push(await this.create(row, actorId));
+    return { imported: created.length, products: created.map((product) => product.id) };
+  }
+
+  private async partOnProduct(productId: string, number: string) {
+    const part = await this.prisma.partNumber.findFirst({ where: { productId, normalized: normalizePartNumber(number) } });
+    if (!part) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'That part number is not on this product');
+    return part;
+  }
+}
+
+function parseCsv(csv: string) {
+  const [header, ...lines] = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+  if (!header) return [];
+  const columns = header.split(',').map((column) => column.trim());
+  return lines.map((line) => {
+    const cells = line.split(',').map((cell) => cell.trim());
+    const row: Record<string, string> = {};
+    columns.forEach((column, index) => { row[column] = cells[index] ?? ''; });
+    return row as { name: string; manufacturerName: string; categorySlug: string; sellingPrice: string; stockQty: string; partNumber: string; partType: string };
+  });
 }
 
 export function presentProduct(product: Prisma.ProductGetPayload<{ include: typeof productInclude }>) {

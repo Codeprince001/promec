@@ -1,13 +1,18 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { ApiException } from '../../common/api.exception';
 import { money, moneyNumber } from '../../common/money';
 import { pageMeta } from '../../common/pagination';
 import { assertTransition, type OrderState } from '../../domain/order-status';
+import { tradeUnitPrice } from '../../domain/commerce';
+import { roundMoney } from '../../domain/credit';
 import { referenceCode } from '../../domain/slug';
+import { OutboxService } from '../../infra/outbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { AuditService } from '../audit/audit.service';
+import { CreditService } from '../b2b/credit.service';
 import { PaystackClient } from '../payments/paystack.client';
 import { CartService } from '../cart/cart.service';
 import { CompatibilityService } from '../compatibility/compatibility.service';
@@ -15,6 +20,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { ShippingService } from '../shipping/shipping.service';
+import { VendorCommerceService } from '../vendors/vendor-commerce.service';
 
 export type CheckoutInput = {
   userId?: string;
@@ -32,7 +38,8 @@ export type CheckoutInput = {
   contactEmail?: string;
   contactPhone?: string;
   deliveryMethod: 'courier' | 'pickup';
-  paymentMethod: 'paystack' | 'bank_transfer';
+  courierCode?: 'gig' | 'dhl';
+  paymentMethod: 'paystack' | 'bank_transfer' | 'account_credit';
   couponCode?: string;
   confirmPriceChange?: boolean;
   confirmUnverifiedFit?: boolean;
@@ -41,7 +48,7 @@ export type CheckoutInput = {
 };
 
 @Injectable()
-export class OrdersService {
+export class OrdersService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cart: CartService,
@@ -53,7 +60,19 @@ export class OrdersService {
     private readonly audit: AuditService,
     private readonly config: ConfigService,
     private readonly paystack: PaystackClient,
+    private readonly credit: CreditService,
+    private readonly analytics: AnalyticsService,
+    private readonly vendors: VendorCommerceService,
+    private readonly outbox: OutboxService,
   ) {}
+
+  onModuleInit() {
+    this.outbox.register('shipment.delivered', async (payload) => {
+      if (typeof payload.orderId !== 'string') return;
+      const order = await this.prisma.order.findUnique({ where: { id: payload.orderId } });
+      if (order?.status === 'dispatched') await this.transition(payload.orderId, 'delivered', null);
+    });
+  }
 
   async checkout(input: CheckoutInput) {
     if (input.idempotencyKey) {
@@ -74,7 +93,12 @@ export class OrdersService {
     const open = await this.cart.openCart({ userId: input.userId, guestToken: input.guestToken });
     if (!open.items.length) throw new ApiException(HttpStatus.CONFLICT, 'CART_EMPTY', 'Your cart is empty');
 
-    const lines: { item: (typeof open.items)[number]; unitPrice: number }[] = [];
+    const trade = input.userId ? await this.credit.accountFor(input.userId) : null;
+    const listPrices = trade ? await this.credit.listPrices(trade.accountId, open.items.map((item) => item.skuId)) : new Map<string, number>();
+    const vendorIds = [...new Set(open.items.flatMap((item) => (item.sku.product.vendorId ? [item.sku.product.vendorId] : [])))];
+    const vendorRows = vendorIds.length ? await this.prisma.vendor.findMany({ where: { id: { in: vendorIds } } }) : [];
+    const vendorById = new Map(vendorRows.map((vendor) => [vendor.id, vendor]));
+    const lines: { item: (typeof open.items)[number]; unitPrice: number; discount: number; vendorFulfils: boolean; vendorId?: string }[] = [];
     let weight = 0;
     for (const item of open.items) {
       const current = moneyNumber(item.sku.sellingPrice);
@@ -99,14 +123,29 @@ export class OrdersService {
         }
         item.fitmentStatusSnapshot = decision.status;
       }
+      const seller = item.sku.product.vendorId ? vendorById.get(item.sku.product.vendorId) : undefined;
+      if (seller && seller.status !== 'approved') {
+        throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'This vendor is not allowed to sell');
+      }
+      const priced = tradeUnitPrice(current, trade?.discountRate ?? 0, listPrices.get(item.skuId) ?? null);
       weight += item.sku.weightG * item.qty;
-      lines.push({ item, unitPrice: current });
+      lines.push({
+        item,
+        unitPrice: priced.unit,
+        discount: priced.discount,
+        vendorFulfils: seller?.fulfilmentMode === 'vendor',
+        vendorId: seller?.id,
+      });
     }
-    const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.item.qty, 0);
-    const promo = await this.promotions.preview(input.couponCode, subtotal);
-    const quote = await this.shipping.quote(address.state, weight, input.deliveryMethod);
+    const subtotal = lines.reduce((sum, line) => sum + moneyNumber(line.item.sku.sellingPrice) * line.item.qty, 0);
+    const creditTerms = input.paymentMethod === 'account_credit' ? await this.tradeAccount(input.userId) : null;
+    const tradeDiscount = roundMoney(lines.reduce((sum, line) => sum + line.discount * line.item.qty, 0));
+    const merchandise = roundMoney(subtotal - tradeDiscount);
+    const promo = await this.promotions.preview(input.couponCode, merchandise);
+    const quote = await this.shipping.quote(address.state, weight, input.deliveryMethod, input.courierCode);
     const shippingTotal = Number(quote.amount);
-    const grand = Math.max(0, subtotal - promo.discount + shippingTotal);
+    const grand = Math.max(0, subtotal - tradeDiscount - promo.discount + shippingTotal);
+    if (creditTerms) this.credit.assertAmount(creditTerms, grand);
     const orderNo = referenceCode('PRM');
     const providerRef = referenceCode('PAY');
 
@@ -122,14 +161,17 @@ export class OrdersService {
         data: {
           orderNo,
           customerId: customer?.id,
+          businessAccountId: creditTerms?.accountId,
           contactEmail,
           contactPhone: input.contactPhone ?? address.phone,
+          status: creditTerms ? 'processing' : 'pending_payment',
           subtotal,
-          discountTotal: promo.discount,
+          discountTotal: promo.discount + tradeDiscount,
           shippingTotal,
           grandTotal: grand,
           couponCode: promo.code,
           deliveryMethod: input.deliveryMethod,
+          courierCode: quote.courier,
           shippingAddress: address,
           notes: input.notes,
           items: {
@@ -144,19 +186,25 @@ export class OrdersService {
           },
           payments: {
             create: {
-              provider: input.paymentMethod === 'paystack' ? 'paystack' : 'bank_transfer',
+              provider: input.paymentMethod === 'paystack' ? 'paystack' : input.paymentMethod === 'account_credit' ? 'account_credit' : 'bank_transfer',
               providerRef,
               amount: grand,
               currency: 'NGN',
               method: input.paymentMethod,
               status: 'pending',
+              dueAt: creditTerms?.dueAt,
             },
           },
         },
         include: { items: true, payments: true },
       });
-      for (const item of created.items) {
-        const stock = await this.inventory.reserve(tx, item.skuId, item.qty);
+      for (const [index, item] of created.items.entries()) {
+        const line = lines[index];
+        if (line?.vendorFulfils && line.vendorId) {
+          await this.vendors.reserve(tx, line.vendorId, item.skuId, item.qty, item.id);
+          continue;
+        }
+        const stock = await this.inventory.reserve(tx, item.skuId, item.qty, address.state);
         await tx.inventoryReservation.create({
           data: {
             inventoryId: stock.id,
@@ -166,7 +214,17 @@ export class OrdersService {
           },
         });
       }
+      if (creditTerms) await this.vendors.accrue(tx, created.id);
       if (promo.code) await this.promotions.consume(tx, promo.code);
+      if (creditTerms) {
+        await this.credit.draw(tx, {
+          accountId: creditTerms.accountId,
+          orderId: created.id,
+          amount: grand,
+          reference: orderNo,
+          spendingLimit: creditTerms.spendingLimit,
+        });
+      }
       await tx.cartItem.deleteMany({ where: { cartId: open.id } });
       await tx.cart.update({ where: { id: open.id }, data: { status: 'checked_out' } });
       const full = await tx.order.findUniqueOrThrow({ where: { id: created.id }, include: orderInclude });
@@ -194,6 +252,23 @@ export class OrdersService {
         template: 'order.placed',
         payload: { orderNo: body.orderNo, total: body.grandTotal },
       });
+    }
+    if (creditTerms) {
+      await this.analytics.record('sale', grand, { orderNo: body.orderNo, channel: 'account_credit' });
+    }
+    if (input.paymentMethod === 'bank_transfer') {
+      const reference = body.payments[0]?.reference;
+      return {
+        ...body,
+        bankTransfer: {
+          accountName: this.config.get<string>('BANK_ACCOUNT_NAME') ?? 'PROMEC Limited',
+          bankName: this.config.get<string>('BANK_NAME') ?? '',
+          accountNumber: this.config.get<string>('BANK_ACCOUNT_NUMBER') ?? '',
+          reference,
+          amount: body.grandTotal,
+          proofUrl: reference ? `/api/v1/payments/${reference}/proof` : null,
+        },
+      };
     }
     if (input.paymentMethod === 'paystack' && contactEmail) {
       const reference = body.payments[0]?.reference;
@@ -276,13 +351,15 @@ export class OrdersService {
       data: { status: 'paid', verifiedAt: new Date(), rawResponse: raw },
     });
     await this.transition(payment.orderId, 'paid', null);
+    await this.prisma.$transaction((tx) => this.vendors.accrue(tx, payment.orderId));
+    await this.analytics.record('sale', amountMajor, { orderNo: payment.order.orderNo, channel: payment.provider });
     return this.transition(payment.orderId, 'processing', null);
   }
 
   async transition(id: string, to: OrderState, actorId: string | null) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { items: { include: { reservations: true } } },
+      include: { items: { include: { reservations: { include: { inventory: true } }, sku: true } } },
     });
     if (!order) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Order was not found');
     try {
@@ -297,24 +374,35 @@ export class OrdersService {
             await this.inventory.release(tx, reservation.inventoryId, reservation.qty);
             await tx.inventoryReservation.update({ where: { id: reservation.id }, data: { status: 'released' } });
           }
+          await this.vendors.release(tx, item.id);
+        }
+        if (to === 'cancelled') {
+          await this.credit.reverse(tx, order.id);
+          await this.vendors.reverse(tx, order.id);
         }
       }
       if (to === 'dispatched') {
+        const warehouses = new Set<string>();
         for (const item of order.items) {
           for (const reservation of item.reservations.filter((row) => row.status === 'active')) {
             await this.inventory.commitSale(tx, reservation.inventoryId, reservation.qty, order.id);
             await tx.inventoryReservation.update({ where: { id: reservation.id }, data: { status: 'committed' } });
+            warehouses.add(reservation.inventory.warehouseId);
           }
         }
-        await tx.shipment.create({
-          data: {
+        const weight = order.items.reduce((sum, item) => sum + item.sku.weightG * item.qty, 0);
+        for (const [index, warehouseId] of [...warehouses].entries()) {
+          await this.shipping.book(tx, {
             orderId: order.id,
-            status: 'dispatched',
-            shippedAt: new Date(),
-            trackingNo: referenceCode('TRK'),
-            events: { create: { status: 'dispatched', note: 'Handed to courier' } },
-          },
-        });
+            orderNo: order.orderNo,
+            address: order.shippingAddress,
+            weightG: weight,
+            value: Number(order.grandTotal),
+            courierCode: order.courierCode,
+            fee: index === 0 ? Number(order.shippingTotal) : 0,
+            warehouseId,
+          });
+        }
       }
       if (to === 'delivered') {
         await tx.shipment.updateMany({ where: { orderId: order.id }, data: { status: 'delivered', deliveredAt: new Date() } });
@@ -333,6 +421,91 @@ export class OrdersService {
     return this.one(id, undefined, true);
   }
 
+  async placeFromQuote(quoteId: string, userId: string, input: { address: CheckoutInput['address']; paymentMethod: CheckoutInput['paymentMethod']; courierCode?: 'gig' | 'dhl' }) {
+    if (!input.address) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'Delivery address is required');
+    const customer = await this.prisma.customer.findUnique({ where: { userId } });
+    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId }, include: { items: { include: { sku: true } } } });
+    if (!quote || !customer || quote.customerId !== customer.id) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Quote was not found');
+    if (quote.status !== 'approved' || quote.orderId) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Only an approved quote that has not been ordered can be accepted');
+    if (quote.validUntil && quote.validUntil < new Date()) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'This quote has expired');
+    if (quote.items.some((item) => !item.skuId || !item.sku)) {
+      throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Every quoted line needs a catalogue SKU before it can become an order');
+    }
+    const creditTerms = input.paymentMethod === 'account_credit' ? await this.tradeAccount(userId) : null;
+    const subtotal = quote.items.reduce((sum, item) => sum + Number(item.unitPrice) * item.qty, 0);
+    const weight = quote.items.reduce((sum, item) => sum + (item.sku?.weightG ?? 0) * item.qty, 0);
+    const shipping = await this.shipping.quote(input.address.state, weight, 'courier', input.courierCode);
+    const grand = roundMoney(subtotal + Number(shipping.amount));
+    if (creditTerms) this.credit.assertAmount(creditTerms, grand);
+    const orderNo = referenceCode('PRM');
+    const providerRef = referenceCode('PAY');
+    const order = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          orderNo,
+          customerId: customer.id,
+          businessAccountId: quote.businessAccountId,
+          contactPhone: input.address?.phone,
+          status: creditTerms ? 'processing' : 'pending_payment',
+          subtotal,
+          shippingTotal: Number(shipping.amount),
+          grandTotal: grand,
+          deliveryMethod: 'courier',
+          courierCode: shipping.courier,
+          shippingAddress: input.address,
+          notes: `Quote ${quote.quoteNo}`,
+          items: {
+            create: quote.items.map((item) => ({
+              skuId: item.skuId!,
+              qty: item.qty,
+              unitPrice: item.unitPrice,
+              warrantyMonths: item.sku?.productId ? 0 : 0,
+            })),
+          },
+          payments: {
+            create: {
+              provider: input.paymentMethod === 'paystack' ? 'paystack' : input.paymentMethod === 'account_credit' ? 'account_credit' : 'bank_transfer',
+              providerRef,
+              amount: grand,
+              currency: 'NGN',
+              method: input.paymentMethod,
+              status: 'pending',
+              dueAt: creditTerms?.dueAt,
+            },
+          },
+        },
+        include: { items: true },
+      });
+      for (const item of created.items) {
+        const stock = await this.inventory.reserve(tx, item.skuId, item.qty, input.address?.state);
+        await tx.inventoryReservation.create({
+          data: { inventoryId: stock.id, orderItemId: item.id, qty: item.qty, expiresAt: new Date(Date.now() + 30 * 60_000) },
+        });
+      }
+      await tx.quote.update({ where: { id: quote.id }, data: { orderId: created.id, status: 'ordered' } });
+      if (creditTerms) await this.vendors.accrue(tx, created.id);
+      return created;
+    });
+    return this.one(order.id, userId);
+  }
+
+  listReturns() {
+    return this.prisma.returnRequest.findMany({
+      include: { order: { select: { orderNo: true, status: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }).then((rows) => rows.map((row) => ({
+      id: row.id,
+      orderId: row.orderId,
+      orderNo: row.order.orderNo,
+      orderStatus: row.order.status,
+      status: row.status,
+      reasonCode: row.reasonCode,
+      restockQty: row.restockQty,
+      createdAt: row.createdAt.toISOString(),
+    })));
+  }
+
   async requestReturn(id: string, userId: string, reasonCode: string, notes?: string) {
     const customer = await this.prisma.customer.findUnique({ where: { userId } });
     const order = await this.prisma.order.findUnique({ where: { id } });
@@ -347,6 +520,91 @@ export class OrdersService {
     return request;
   }
 
+  async decideReturn(id: string, actorId: string, decision: 'approved' | 'rejected', note?: string) {
+    const request = await this.returnOrThrow(id);
+    if (request.status !== 'requested') throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'This return was already decided');
+    const updated = await this.prisma.returnRequest.update({
+      where: { id },
+      data: { status: decision, inspectionNote: note },
+    });
+    if (decision === 'rejected') await this.transition(request.orderId, 'completed', actorId);
+    await this.notifyReturn(request.orderId, decision);
+    return updated;
+  }
+
+  async receiveReturn(id: string) {
+    const request = await this.returnOrThrow(id);
+    if (request.status !== 'approved') throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Only an approved return can be received');
+    return this.prisma.returnRequest.update({ where: { id }, data: { status: 'received' } });
+  }
+
+  async inspectReturn(id: string, actorId: string, restockQty: number, note?: string) {
+    const request = await this.returnOrThrow(id);
+    if (request.status !== 'received') throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Receive the return before inspection');
+    const order = await this.prisma.order.findUnique({ where: { id: request.orderId }, include: { items: true } });
+    if (!order) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Order was not found');
+    const ordered = order.items.reduce((sum, item) => sum + item.qty, 0);
+    if (restockQty > ordered) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Restock quantity is higher than the order');
+    const shipment = await this.prisma.shipment.findFirst({ where: { orderId: request.orderId, warehouseId: { not: null } } });
+    const warehouse = shipment?.warehouseId
+      ? await this.prisma.warehouse.findUnique({ where: { id: shipment.warehouseId } })
+      : await this.prisma.warehouse.findFirst({ where: { isActive: true }, orderBy: { code: 'asc' } });
+    if (!warehouse) throw new ApiException(HttpStatus.CONFLICT, 'NO_WAREHOUSE', 'No active warehouse is configured');
+    let remaining = restockQty;
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        if (remaining <= 0) break;
+        const qty = Math.min(item.qty, remaining);
+        await this.inventory.receive(tx, item.skuId, warehouse.id, qty, actorId, request.id);
+        remaining -= qty;
+      }
+      await tx.returnRequest.update({
+        where: { id },
+        data: { status: 'inspected', restockQty, inspectionNote: note, inspectedAt: new Date() },
+      });
+    });
+    return this.prisma.returnRequest.findUnique({ where: { id } });
+  }
+
+  async refundReturn(id: string, actorId: string) {
+    const request = await this.returnOrThrow(id);
+    if (request.status !== 'inspected') throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Inspect the return before refunding');
+    const order = await this.prisma.order.findUnique({ where: { id: request.orderId }, include: { payments: { include: { refunds: true } } } });
+    if (!order) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Order was not found');
+    const payment = order.payments.find((row) => row.status === 'paid' || row.status === 'partially_refunded');
+    if (!payment) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'There is no successful payment to refund');
+    const already = payment.refunds.reduce((sum, refund) => sum + Number(refund.amount), 0);
+    const amount = Math.max(0, Number(payment.amount) - already);
+    if (amount <= 0) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'This payment is already refunded');
+    if (payment.provider === 'paystack' && payment.providerRef) await this.paystack.refund(payment.providerRef, amount);
+    await this.prisma.refund.create({
+      data: { paymentId: payment.id, orderId: order.id, amount, reason: `Return ${request.reasonCode}`, status: payment.provider === 'paystack' ? 'paid' : 'pending', approvedBy: actorId },
+    });
+    await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'refunded' } });
+    await this.prisma.returnRequest.update({ where: { id }, data: { status: 'refunded' } });
+    if (order.status === 'return_requested') await this.transition(order.id, 'returned', actorId);
+    await this.notifyReturn(order.id, 'refunded');
+    return this.prisma.returnRequest.findUnique({ where: { id } });
+  }
+
+  private async returnOrThrow(id: string) {
+    const request = await this.prisma.returnRequest.findUnique({ where: { id } });
+    if (!request) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Return was not found');
+    return request;
+  }
+
+  private async notifyReturn(orderId: string, status: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: { customer: true } });
+    if (!order?.customer?.userId && !order?.contactEmail) return;
+    await this.notifications.enqueue({
+      userId: order.customer?.userId,
+      to: order.contactEmail,
+      channel: 'email',
+      template: 'return.updated',
+      payload: { orderNo: order.orderNo, status },
+    });
+  }
+
   private async resolveAddress(customerId: string | undefined, input: CheckoutInput) {
     if (input.addressId) {
       if (!customerId) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'Saved addresses need an account');
@@ -357,6 +615,16 @@ export class OrdersService {
     if (!input.address) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'Delivery address is required');
     return input.address;
   }
+
+  private async tradeAccount(userId: string | undefined) {
+    if (!userId) throw new ApiException(HttpStatus.UNAUTHORIZED, 'UNAUTHENTICATED', 'Sign in to use a trade account');
+    return this.credit.termsFor(userId);
+  }
+}
+
+function stateOf(value: Prisma.JsonValue | null): string {
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'state' in value && typeof value.state === 'string') return value.state;
+  return 'Lagos';
 }
 
 function jsonValue(value: unknown): Prisma.InputJsonValue {
@@ -395,6 +663,7 @@ function presentOrder(order: Prisma.OrderGetPayload<{ include: typeof orderInclu
     grandTotal: money(order.grandTotal),
     couponCode: order.couponCode,
     deliveryMethod: order.deliveryMethod,
+    courierCode: order.courierCode,
     shippingAddress: order.shippingAddress,
     placedAt: order.placedAt.toISOString(),
     items: order.items.map((item) => ({
@@ -417,6 +686,7 @@ function presentOrder(order: Prisma.OrderGetPayload<{ include: typeof orderInclu
       id: shipment.id,
       status: shipment.status,
       trackingNo: shipment.trackingNo,
+      labelUrl: shipment.labelUrl,
       events: shipment.events,
     })),
   };

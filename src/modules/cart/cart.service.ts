@@ -23,7 +23,14 @@ export class CartService {
     if (!sku || sku.product.status !== 'published') {
       throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Product was not found');
     }
-    const available = sku.inventory.reduce((sum, row) => sum + row.onHandQty - row.reservedQty, 0);
+    let available = sku.inventory.reduce((sum, row) => sum + row.onHandQty - row.reservedQty, 0);
+    if (sku.product.vendorId) {
+      const vendor = await this.prisma.vendor.findUnique({ where: { id: sku.product.vendorId } });
+      if (vendor?.status === 'approved' && vendor.fulfilmentMode === 'vendor') {
+        const stock = await this.prisma.vendorStock.findUnique({ where: { vendorId_skuId: { vendorId: vendor.id, skuId: sku.id } } });
+        available = stock ? stock.onHandQty - stock.reservedQty : 0;
+      }
+    }
     if (available < input.qty) throw new ApiException(HttpStatus.CONFLICT, 'OUT_OF_STOCK', 'Not enough stock');
     let fitment: string | null = null;
     if (input.vehicleVariantId) {

@@ -1,4 +1,4 @@
-import { Controller, Get, Module, Post, Body } from '@nestjs/common';
+import { Controller, Get, Module, Post, Body, Query, Global } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
@@ -8,11 +8,15 @@ import { money } from '../../common/money';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchModule } from '../search/search.module';
 import { SearchService } from '../search/search.service';
+import { AnalyticsService } from './analytics.service';
 
 @ApiTags('analytics')
 @Controller('admin/analytics')
 export class AnalyticsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   @Get('overview')
   @Permissions('analytics.view')
@@ -34,6 +38,30 @@ export class AnalyticsController {
       trackedSkus: lowStock,
     };
   }
+
+  @Get('sales')
+  @Permissions('analytics.view')
+  sales(@Query('days') days?: string) {
+    return this.analytics.history('sale', clampDays(days));
+  }
+
+  @Get('fitment')
+  @Permissions('analytics.view')
+  fitment(@Query('days') days?: string) {
+    return this.analytics.history('fitment', clampDays(days));
+  }
+
+  @Get('purchasing')
+  @Permissions('analytics.view')
+  purchasing(@Query('days') days?: string) {
+    return this.analytics.history('purchase', clampDays(days));
+  }
+}
+
+function clampDays(value?: string) {
+  const parsed = Number(value ?? 30);
+  if (!Number.isFinite(parsed)) return 30;
+  return Math.min(366, Math.max(1, Math.floor(parsed)));
 }
 
 @ApiTags('ai')
@@ -69,8 +97,11 @@ export class AiController {
   }
 }
 
+@Global()
 @Module({
   controllers: [AnalyticsController],
+  providers: [AnalyticsService],
+  exports: [AnalyticsService],
 })
 export class AnalyticsModule {}
 

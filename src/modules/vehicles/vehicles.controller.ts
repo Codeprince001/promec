@@ -56,6 +56,12 @@ export class VehiclesController {
   }
 
   @Public()
+  @Post('decode')
+  decode(@Body({ schema: z.object({ vin: z.string().min(11).max(17) }) }) body: { vin: string }) {
+    return this.vehicles.decode(body.vin);
+  }
+
+  @Public()
   @Get('variants/:id')
   variant(@Param('id') id: string) {
     return this.vehicles.getVariant(id);
@@ -68,6 +74,7 @@ export class GarageController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cipher: FieldCipher,
+    private readonly vehicles: VehiclesService,
   ) {}
 
   @Get()
@@ -124,6 +131,22 @@ export class GarageController {
       },
     });
     return presentGarage(updated);
+  }
+
+  @Post(':id/decode')
+  async decodeSaved(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body({ schema: z.object({ apply: z.boolean().default(false) }) }) body: { apply: boolean },
+  ) {
+    const customer = await this.requireCustomer(user.sub);
+    const row = await this.owned(customer.id, id);
+    if (!row.vinEnc) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'This vehicle has no VIN stored');
+    const decoded = await this.vehicles.decode(this.cipher.decrypt(row.vinEnc));
+    if (body.apply && decoded.variantId) {
+      await this.prisma.customerVehicle.update({ where: { id: row.id }, data: { vehicleVariantId: decoded.variantId, year: decoded.year } });
+    }
+    return decoded;
   }
 
   @Delete(':id')

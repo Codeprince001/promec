@@ -6,13 +6,16 @@ import { ApiException } from '../../common/api.exception';
 import { CurrentUser, type AuthUser } from '../../common/decorators/current-user.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { slaDueAt } from '../../domain/operations';
 import { referenceCode } from '../../domain/slug';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const ticketSchema = z.object({
   subject: z.string().min(3).max(160),
   body: z.string().min(3).max(5000),
   category: z.string().default('general'),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
   email: z.string().email().optional(),
   orderId: z.string().uuid().optional(),
 });
@@ -21,7 +24,10 @@ const messageSchema = z.object({ body: z.string().min(1).max(5000) });
 @ApiTags('support')
 @Controller()
 export class SupportController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @Public()
   @Post('support/tickets')
@@ -37,6 +43,8 @@ export class SupportController {
         requesterEmail: body.email,
         subject: body.subject,
         category: body.category,
+        priority: body.priority,
+        dueAt: slaDueAt(body.priority),
         relatedOrderId: body.orderId,
         messages: { create: { authorId: user?.sub, body: body.body, isStaff: false } },
       },
@@ -71,8 +79,33 @@ export class SupportController {
 
   @Post('admin/support/tickets/:id/messages')
   @Permissions('support.manage')
-  staffReply(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body({ schema: messageSchema }) body: z.infer<typeof messageSchema>) {
-    return this.prisma.ticketMessage.create({ data: { ticketId: id, authorId: user.sub, body: body.body, isStaff: true } });
+  async staffReply(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body({ schema: messageSchema }) body: z.infer<typeof messageSchema>) {
+    const ticket = await this.prisma.supportTicket.findUnique({ where: { id }, include: { customer: true } });
+    if (!ticket) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Ticket was not found');
+    const message = await this.prisma.ticketMessage.create({ data: { ticketId: id, authorId: user.sub, body: body.body, isStaff: true } });
+    if (!ticket.firstResponseAt) {
+      await this.prisma.supportTicket.update({ where: { id }, data: { firstResponseAt: new Date(), status: 'pending' } });
+    }
+    await this.notifications.enqueue({
+      userId: ticket.customer?.userId,
+      to: ticket.requesterEmail,
+      channel: 'email',
+      template: 'ticket.reply',
+      payload: { ticketNo: ticket.ticketNo },
+    });
+    return message;
+  }
+
+  @Post('admin/support/tickets/:id/assign')
+  @Permissions('support.manage')
+  async assign(@Param('id') id: string, @Body({ schema: z.object({ assigneeId: z.string().uuid(), priority: z.enum(['low', 'normal', 'high', 'urgent']).optional() }) }) body: { assigneeId: string; priority?: 'low' | 'normal' | 'high' | 'urgent' }) {
+    const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
+    if (!ticket) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Ticket was not found');
+    const priority = body.priority ?? ticket.priority;
+    return this.prisma.supportTicket.update({
+      where: { id },
+      data: { assigneeId: body.assigneeId, priority, dueAt: slaDueAt(priority, ticket.createdAt) },
+    });
   }
 }
 

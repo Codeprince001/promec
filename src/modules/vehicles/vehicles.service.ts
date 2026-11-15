@@ -1,10 +1,15 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiException } from '../../common/api.exception';
+import { assertVin, matchVariant } from '../../domain/commerce';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class VehiclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   makes() {
     return this.prisma.vehicleMake.findMany({ orderBy: { name: 'asc' } });
@@ -64,5 +69,54 @@ export class VehiclesService {
     });
     if (!variant) throw new ApiException(HttpStatus.NOT_FOUND, 'VARIANT_NOT_FOUND', 'Vehicle variant was not found');
     return variant;
+  }
+
+  async decode(vin: string) {
+    let normalized: string;
+    try {
+      normalized = assertVin(vin);
+    } catch (error) {
+      throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', error instanceof Error ? error.message : 'Invalid VIN');
+    }
+    const base = (this.config.get<string>('VIN_DECODE_URL') || 'https://vpic.nhtsa.dot.gov/api').replace(/\/$/, '');
+    const response = await fetch(`${base}/vehicles/DecodeVinValues/${normalized}?format=json`, { signal: AbortSignal.timeout(15_000) });
+    const json = (await response.json().catch(() => ({}))) as { Results?: Record<string, string>[] };
+    const row = json.Results?.[0];
+    const year = Number(row?.ModelYear);
+    if (!response.ok || !row?.Make || !row.Model || !Number.isInteger(year)) {
+      throw new ApiException(HttpStatus.BAD_GATEWAY, 'GATEWAY_ERROR', 'The VIN could not be decoded');
+    }
+    const litres = Number(row.DisplacementL);
+    const displacementCc = Number.isFinite(litres) && litres > 0 ? Math.round(litres * 1000) : null;
+    const variants = await this.prisma.vehicleVariant.findMany({
+      where: {
+        yearFrom: { lte: year },
+        yearTo: { gte: year },
+        model: { name: { contains: row.Model, mode: 'insensitive' }, make: { name: { equals: row.Make, mode: 'insensitive' } } },
+      },
+      include: { engine: true, model: { include: { make: true } } },
+    });
+    const variantId = matchVariant({
+      make: row.Make,
+      model: row.Model,
+      year,
+      displacementCc,
+    }, variants.map((variant) => ({
+      id: variant.id,
+      make: variant.model.make.name,
+      model: variant.model.name,
+      yearFrom: variant.yearFrom,
+      yearTo: variant.yearTo,
+      displacementCc: variant.engine?.displacementCc ?? null,
+    })));
+    return {
+      make: row.Make,
+      model: row.Model,
+      year,
+      displacementCc,
+      fuel: row.FuelTypePrimary || null,
+      variantId,
+      variant: variants.find((variant) => variant.id === variantId) ?? null,
+    };
   }
 }

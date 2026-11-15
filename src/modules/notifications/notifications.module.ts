@@ -16,7 +16,7 @@ export class NotificationsModule implements OnModuleInit {
   onModuleInit() {
     this.queue.register('notification.send', async (data) => {
       const id = data.notificationId;
-      if (typeof id === 'string') await this.notifications.markSent(id);
+      if (typeof id === 'string') await this.notifications.dispatch(id);
     });
   }
 }

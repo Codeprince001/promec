@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiException } from '../../common/api.exception';
 import { CurrentUser, type AuthUser } from '../../common/decorators/current-user.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const addressSchema = z.object({
@@ -28,6 +29,25 @@ async function customerOf(prisma: PrismaService, userId: string) {
 @Controller()
 export class UsersController {
   constructor(private readonly prisma: PrismaService) {}
+
+  @Get('admin/users')
+  @Permissions('users.manage')
+  async staff() {
+    const rows = await this.prisma.user.findMany({
+      where: { deletedAt: null, userType: { in: ['staff', 'vendor'] } },
+      include: { roles: { include: { role: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      phone: row.phone,
+      type: row.userType,
+      status: row.status,
+      mfaEnabled: row.mfaEnabled,
+      roles: row.roles.map((link) => link.role.name),
+    }));
+  }
 
   @Get('me/addresses')
   async addresses(@CurrentUser() user: AuthUser) {

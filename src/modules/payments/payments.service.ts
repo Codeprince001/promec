@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { ApiException } from '../../common/api.exception';
 import { money } from '../../common/money';
 import { AuditService } from '../audit/audit.service';
@@ -95,5 +96,64 @@ export class PaymentsService {
       after: { amount: money(amount), reason },
     });
     return refund;
+  }
+
+  async submitProof(reference: string, input: { amount: number; bankReference: string; evidenceUrl: string }) {
+    if (!input.evidenceUrl.startsWith('https://')) {
+      throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'Payment evidence must be an https URL');
+    }
+    const payment = await this.prisma.payment.findUnique({ where: { providerRef: reference } });
+    if (!payment) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Payment reference was not found');
+    if (payment.provider !== 'bank_transfer') {
+      throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Proof of payment is only used for bank transfer');
+    }
+    if (Math.abs(Number(payment.amount) - input.amount) > 0.01) {
+      throw new ApiException(HttpStatus.CONFLICT, 'AMOUNT_MISMATCH', 'The transfer amount does not match the order');
+    }
+    try {
+      return await this.prisma.paymentProof.create({
+        data: { paymentId: payment.id, amount: input.amount, bankReference: input.bankReference.trim(), evidenceUrl: input.evidenceUrl },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'That bank reference was already submitted for this payment');
+      }
+      throw error;
+    }
+  }
+
+  listProofs(status = 'pending') {
+    return this.prisma.paymentProof.findMany({
+      where: { status },
+      include: { payment: { include: { order: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+    });
+  }
+
+  async matchProof(id: string, actorId: string) {
+    const proof = await this.prisma.paymentProof.findUnique({ where: { id }, include: { payment: true } });
+    if (!proof) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Payment proof was not found');
+    if (proof.status !== 'pending') throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'This proof was already reviewed');
+    if (!proof.payment.providerRef) throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'Payment has no reference');
+    await this.orders.markPaid(proof.payment.providerRef, Number(proof.amount));
+    const updated = await this.prisma.paymentProof.update({
+      where: { id },
+      data: { status: 'matched', reviewedBy: actorId, reviewedAt: new Date() },
+    });
+    await this.audit.log({ actorId, action: 'payment.proof.match', entityType: 'payment_proof', entityId: id, after: { bankReference: proof.bankReference } });
+    return updated;
+  }
+
+  async rejectProof(id: string, actorId: string, note: string) {
+    const proof = await this.prisma.paymentProof.findUnique({ where: { id } });
+    if (!proof) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Payment proof was not found');
+    if (proof.status !== 'pending') throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'This proof was already reviewed');
+    const updated = await this.prisma.paymentProof.update({
+      where: { id },
+      data: { status: 'rejected', note, reviewedBy: actorId, reviewedAt: new Date() },
+    });
+    await this.audit.log({ actorId, action: 'payment.proof.reject', entityType: 'payment_proof', entityId: id, after: { note } });
+    return updated;
   }
 }

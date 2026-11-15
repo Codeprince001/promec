@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true, instrument: ObserveInstrument });
   app.use(cookieParser());
   app.enableCors({
-    origin: process.env.APP_URL ?? 'http://localhost:3000',
+    origin: [process.env.APP_URL ?? 'http://localhost:3000', process.env.ADMIN_URL ?? 'http://localhost:3001'],
     credentials: true,
   });
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'docs'] });

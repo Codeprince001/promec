@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -18,6 +18,12 @@ const webhookSchema = z.object({
 const refundSchema = z.object({
   amount: z.number().positive(),
   reason: z.string().min(3).max(300),
+});
+
+const proofSchema = z.object({
+  amount: z.number().positive(),
+  bankReference: z.string().min(4).max(80),
+  evidenceUrl: z.string().url(),
 });
 
 @ApiTags('payments')
@@ -46,6 +52,30 @@ export class PaymentsController {
   @Post('payments/:reference/simulate')
   simulate(@Param('reference') reference: string) {
     return this.payments.simulate(reference);
+  }
+
+  @Public()
+  @Post('payments/:reference/proof')
+  proof(@Param('reference') reference: string, @Body({ schema: proofSchema }) body: z.infer<typeof proofSchema>) {
+    return this.payments.submitProof(reference, body);
+  }
+
+  @Get('admin/payments/proofs')
+  @Permissions('payments.manage')
+  proofs(@Query('status') status?: string) {
+    return this.payments.listProofs(status || 'pending');
+  }
+
+  @Post('admin/payments/proofs/:id/match')
+  @Permissions('payments.manage')
+  match(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.payments.matchProof(id, user.sub);
+  }
+
+  @Post('admin/payments/proofs/:id/reject')
+  @Permissions('payments.manage')
+  reject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body({ schema: z.object({ note: z.string().min(3).max(300) }) }) body: { note: string }) {
+    return this.payments.rejectProof(id, user.sub, body.note);
   }
 
   @Post('admin/payments/:reference/confirm')

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ApiException } from '../../common/api.exception';
 import { decideFitment, type FitmentResult, type FitmentRow } from '../../domain/fitment';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 
 @Injectable()
@@ -10,12 +11,13 @@ export class CompatibilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vehicles: VehiclesService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   async check(productId: string, variantId: string, year?: number): Promise<FitmentResult> {
     const variant = await this.vehicles.getVariant(variantId);
     const rows = await this.rowsForProducts([productId], variant.id, variant.modelId, variant.model.makeId);
-    return decideFitment(rows.get(productId) ?? [], {
+    const result = decideFitment(rows.get(productId) ?? [], {
       id: variant.id,
       modelId: variant.modelId,
       makeId: variant.model.makeId,
@@ -23,6 +25,8 @@ export class CompatibilityService {
       yearFrom: variant.yearFrom,
       yearTo: variant.yearTo,
     }, year);
+    await this.analytics.record('fitment', 0, { productId, variantId, status: result.status });
+    return result;
   }
 
   async checkMany(items: { productId: string; vehicleVariantId: string }[]) {

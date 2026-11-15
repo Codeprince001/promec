@@ -40,6 +40,10 @@ export class PromotionsService {
     return this.prisma.promotion.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
+  update(id: string, active: boolean) {
+    return this.prisma.promotion.update({ where: { id }, data: { active } });
+  }
+
   create(input: { code: string; type: 'percent' | 'fixed'; amount: number; minSpend?: number; usageLimit?: number; description?: string }) {
     return this.prisma.promotion.create({
       data: {
