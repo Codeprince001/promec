@@ -96,6 +96,22 @@ export class SupportController {
     return message;
   }
 
+  @Get('admin/support/tickets/:id')
+  @Permissions('support.manage')
+  async one(@Param('id') id: string) {
+    const ticket = await this.prisma.supportTicket.findUnique({ where: { id }, include: { messages: { orderBy: { createdAt: 'asc' } }, customer: true, assignee: { select: { id: true, email: true } } } });
+    if (!ticket) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Ticket was not found');
+    return ticket;
+  }
+
+  @Post('admin/support/tickets/:id/close')
+  @Permissions('support.manage')
+  async close(@Param('id') id: string, @Body({ schema: z.object({ status: z.enum(['resolved', 'closed']) }) }) body: { status: 'resolved' | 'closed' }) {
+    const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
+    if (!ticket) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Ticket was not found');
+    return this.prisma.supportTicket.update({ where: { id }, data: { status: body.status } });
+  }
+
   @Post('admin/support/tickets/:id/assign')
   @Permissions('support.manage')
   async assign(@Param('id') id: string, @Body({ schema: z.object({ assigneeId: z.string().uuid(), priority: z.enum(['low', 'normal', 'high', 'urgent']).optional() }) }) body: { assigneeId: string; priority?: 'low' | 'normal' | 'high' | 'urgent' }) {

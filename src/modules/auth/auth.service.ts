@@ -75,7 +75,7 @@ export class AuthService {
     if (user.status !== 'active') {
       throw new ApiException(HttpStatus.FORBIDDEN, 'ACCOUNT_DISABLED', 'This account is disabled');
     }
-    if (user.mfaEnabled || user.userType !== UserType.customer) {
+    if (user.mfaEnabled) {
       const enrolled = Boolean(user.totpSecretEnc && user.totpConfirmedAt);
       const pendingSecret = enrolled ? null : generateTotpSecret();
       const challenge = await this.prisma.mfaChallenge.create({
@@ -150,6 +150,12 @@ export class AuthService {
     return this.issueTokens(challenge.user.id, challenge.user.userType, randomUUID(), ctx);
   }
 
+  async sendPasswordResetFor(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.email || user.deletedAt) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'User was not found');
+    return this.requestPasswordReset(user.email);
+  }
+
   async requestPasswordReset(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (user?.email && !user.deletedAt) {
@@ -208,6 +214,18 @@ export class AuthService {
     const result = await this.prisma.session.updateMany({ where: { id: sessionId, userId, revokedAt: null }, data: { revokedAt: new Date() } });
     if (!result.count) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Session was not found');
     return { revoked: true };
+  }
+
+  async clearMfa(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'User was not found');
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabled: false, totpSecretEnc: null, totpConfirmedAt: null, totpLastStep: null },
+    });
+    await this.prisma.recoveryCode.deleteMany({ where: { userId } });
+    await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    return { cleared: true };
   }
 
   async replaceRecoveryCodes(userId: string) {

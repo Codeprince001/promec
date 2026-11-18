@@ -26,10 +26,11 @@ export const productWriteSchema = z.object({
   status: z.enum(['draft', 'in_review', 'published', 'archived']).default('draft'),
 });
 
-const productInclude = {
+export const productInclude = {
   manufacturer: true,
   category: true,
-  skus: { include: { inventory: true } },
+  vendor: true,
+  skus: { include: { inventory: true, vendorStock: true } },
   media: { orderBy: { sortOrder: 'asc' as const } },
   partNumbers: true,
 } satisfies Prisma.ProductInclude;
@@ -75,6 +76,70 @@ export class CatalogueService {
       this.prisma.product.count({ where }),
     ]);
     return { data: rows.map(presentProduct), meta: pageMeta(query.page, query.pageSize, total) };
+  }
+
+  async adminOne(id: string) {
+    const product = await this.prisma.product.findFirst({ where: { id, deletedAt: null }, include: productInclude });
+    if (!product) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Product was not found');
+    return presentProduct(product);
+  }
+
+  manufacturers() {
+    return this.prisma.manufacturer.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async createCategory(input: { name: string; parentId?: string; description?: string; sortOrder?: number }) {
+    const parent = input.parentId ? await this.prisma.category.findUnique({ where: { id: input.parentId } }) : null;
+    if (input.parentId && !parent) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Parent category was not found');
+    const slug = slugify(input.name);
+    return this.prisma.category.create({
+      data: {
+        name: input.name,
+        slug,
+        path: parent ? `${parent.path}/${slug}` : slug,
+        parentId: parent?.id,
+        description: input.description,
+        sortOrder: input.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async updateCategory(id: string, input: { name?: string; description?: string | null; sortOrder?: number }) {
+    const current = await this.prisma.category.findUnique({ where: { id } });
+    if (!current) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Category was not found');
+    return this.prisma.category.update({
+      where: { id },
+      data: {
+        name: input.name,
+        description: input.description,
+        sortOrder: input.sortOrder,
+      },
+    });
+  }
+
+  async updateManufacturer(id: string, input: { name?: string; country?: string | null; type?: string }) {
+    try {
+      return await this.prisma.manufacturer.update({ where: { id }, data: input });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Manufacturer was not found');
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'A manufacturer with that name already exists');
+      }
+      throw error;
+    }
+  }
+
+  async createManufacturer(input: { name: string; country?: string; type: string }) {
+    try {
+      return await this.prisma.manufacturer.create({ data: input });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ApiException(HttpStatus.CONFLICT, 'CONFLICT', 'A manufacturer with that name already exists');
+      }
+      throw error;
+    }
   }
 
   async bySlug(slug: string) {
@@ -259,11 +324,32 @@ function parseCsv(csv: string) {
   });
 }
 
+function skuAvailable(
+  product: { vendor: { id: string; fulfilmentMode: string } | null },
+  sku: {
+    inventory: { onHandQty: number; reservedQty: number }[];
+    vendorStock: { vendorId: string; onHandQty: number; reservedQty: number }[];
+  },
+) {
+  if (product.vendor?.fulfilmentMode === 'vendor') {
+    return sku.vendorStock
+      .filter((row) => row.vendorId === product.vendor?.id)
+      .reduce((sum, row) => sum + (row.onHandQty - row.reservedQty), 0);
+  }
+  return sku.inventory.reduce((sum, row) => sum + (row.onHandQty - row.reservedQty), 0);
+}
+
 export function presentProduct(product: Prisma.ProductGetPayload<{ include: typeof productInclude }>) {
-  const available = product.skus.reduce(
-    (sum, sku) => sum + sku.inventory.reduce((inner, row) => inner + (row.onHandQty - row.reservedQty), 0),
-    0,
-  );
+  const store = product.vendor?.status === 'approved'
+    ? {
+        slug: product.vendor.slug,
+        businessName: product.vendor.businessName,
+        logoUrl: product.vendor.logoUrl,
+        ratingAvg: money(product.vendor.ratingAvg),
+        ratingCount: product.vendor.ratingCount,
+        fulfilmentMode: product.vendor.fulfilmentMode,
+      }
+    : null;
   return {
     id: product.id,
     slug: product.slug,
@@ -278,16 +364,20 @@ export function presentProduct(product: Prisma.ProductGetPayload<{ include: type
     category: { id: product.category.id, name: product.category.name, slug: product.category.slug, path: product.category.path },
     partNumbers: product.partNumbers.map((part) => ({ number: part.number, normalized: part.normalized, type: part.type })),
     media: product.media.map((item) => ({ url: item.url, alt: item.alt })),
-    skus: product.skus.map((sku) => ({
-      id: sku.id,
-      sku: sku.sku,
-      price: { amount: money(sku.sellingPrice), currency: sku.currencyCode },
-      weightG: sku.weightG,
-      availability: {
-        status: available > 0 ? 'in_stock' : 'out_of_stock',
-        qty: sku.inventory.reduce((sum, row) => sum + (row.onHandQty - row.reservedQty), 0),
-      },
-    })),
+    store,
+    skus: product.skus.map((sku) => {
+      const qty = skuAvailable(product, sku);
+      return {
+        id: sku.id,
+        sku: sku.sku,
+        price: { amount: money(sku.sellingPrice), currency: sku.currencyCode },
+        weightG: sku.weightG,
+        availability: {
+          status: qty > 0 ? 'in_stock' : 'out_of_stock',
+          qty,
+        },
+      };
+    }),
     fitmentStatus: null as FitmentStatus | null,
   };
 }

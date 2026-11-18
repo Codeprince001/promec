@@ -111,6 +111,18 @@ export class AuthController {
     return this.auth.replaceRecoveryCodes(id);
   }
 
+  @Post('admin/users/:id/password-reset')
+  @Permissions('users.manage')
+  sendPasswordReset(@Param('id') id: string) {
+    return this.auth.sendPasswordResetFor(id);
+  }
+
+  @Post('admin/users/:id/mfa/disable')
+  @Permissions('users.manage')
+  disableMfa(@Param('id') id: string) {
+    return this.auth.clearMfa(id);
+  }
+
   private async withCookie(pending: ReturnType<AuthService['login']>, res: Response) {
     const result = await pending;
     if ('refreshToken' in result && result.refreshToken) {

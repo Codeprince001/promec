@@ -3,6 +3,8 @@ import { FitmentStatus, PrismaClient, UserType } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { hashPassword } from '../src/modules/auth/password';
+import { seedCatalogue } from './catalogue-seed';
+import { seedStores } from './store-seed';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg(new Pool({ connectionString: process.env.DATABASE_URL })),
@@ -204,6 +206,12 @@ async function main() {
       },
     });
   }
+
+  const catalogue = await seedCatalogue(prisma, warehouse.id, source.id);
+  console.log(`Catalogue: ${catalogue.vehicles} vehicles, ${catalogue.parts} fitment rows`);
+  const shops = await seedStores(prisma, source.id);
+  console.log(`Stores: ${shops.stores} shops, ${shops.products} new store parts, ${shops.images} photos added`);
+  console.log('Store sign-in password is StorePass123 for ikeja-brakes@promec.test, yaba-filters@promec.test, surulere-spark@promec.test, apapa-suspension@promec.test');
 
   await prisma.promotion.upsert({
     where: { code: 'WELCOME10' },

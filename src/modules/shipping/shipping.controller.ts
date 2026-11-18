@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -76,6 +76,31 @@ export class ShippingAdminController {
   @Permissions('orders.manage')
   book(@Param('id') id: string) {
     return this.shipping.retryBooking(id);
+  }
+
+  @Get('admin/delivery-zones')
+  @Permissions('orders.manage')
+  zones() {
+    return this.shipping.listZones();
+  }
+
+  @Post('admin/delivery-zones')
+  @Permissions('orders.manage')
+  createZone(
+    @Body({ schema: z.object({ name: z.string().min(2).max(80), states: z.array(z.string().min(2)).min(1), baseFee: z.number().min(0), perKgFee: z.number().min(0), currency: z.string().length(3).optional(), isActive: z.boolean().optional() }) })
+    body: { name: string; states: string[]; baseFee: number; perKgFee: number; currency?: string; isActive?: boolean },
+  ) {
+    return this.shipping.createZone(body);
+  }
+
+  @Patch('admin/delivery-zones/:id')
+  @Permissions('orders.manage')
+  updateZone(
+    @Param('id') id: string,
+    @Body({ schema: z.object({ name: z.string().min(2).max(80).optional(), states: z.array(z.string().min(2)).min(1).optional(), baseFee: z.number().min(0).optional(), perKgFee: z.number().min(0).optional(), isActive: z.boolean().optional() }) })
+    body: { name?: string; states?: string[]; baseFee?: number; perKgFee?: number; isActive?: boolean },
+  ) {
+    return this.shipping.updateZone(id, body);
   }
 
   @Post('admin/shipments/events')

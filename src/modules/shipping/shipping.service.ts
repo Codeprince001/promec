@@ -202,6 +202,29 @@ export class ShippingService {
     return this.track(trackingNo);
   }
 
+  listZones() {
+    return this.prisma.deliveryZone.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  createZone(input: { name: string; states: string[]; baseFee: number; perKgFee: number; currency?: string; isActive?: boolean }) {
+    return this.prisma.deliveryZone.create({
+      data: {
+        name: input.name,
+        states: input.states,
+        baseFee: input.baseFee,
+        perKgFee: input.perKgFee,
+        currency: input.currency ?? 'NGN',
+        isActive: input.isActive ?? true,
+      },
+    });
+  }
+
+  async updateZone(id: string, input: { name?: string; states?: string[]; baseFee?: number; perKgFee?: number; isActive?: boolean }) {
+    const current = await this.prisma.deliveryZone.findUnique({ where: { id } });
+    if (!current) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Delivery zone was not found');
+    return this.prisma.deliveryZone.update({ where: { id }, data: input });
+  }
+
   assertWebhook(secret: string, rawBody: Buffer | undefined, signature: string | undefined, production = false) {
     if (!secret) {
       if (production) throw new ApiException(HttpStatus.UNAUTHORIZED, 'INVALID_SIGNATURE', 'Courier webhook secret is not configured');

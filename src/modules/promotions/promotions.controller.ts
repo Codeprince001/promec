@@ -34,8 +34,28 @@ export class PromotionsController {
 
   @Patch(':id')
   @Permissions('promotions.manage')
-  async update(@Param('id') id: string, @Body({ schema: z.object({ active: z.boolean() }) }) body: { active: boolean }) {
-    const row = await this.promotions.update(id, body.active);
+  async update(
+    @Param('id') id: string,
+    @Body({ schema: z.object({
+      active: z.boolean().optional(),
+      amount: z.number().positive().optional(),
+      minSpend: z.number().min(0).optional(),
+      usageLimit: z.number().int().positive().nullable().optional(),
+      description: z.string().max(200).nullable().optional(),
+      startsAt: z.string().datetime().nullable().optional(),
+      endsAt: z.string().datetime().nullable().optional(),
+    }) })
+    body: { active?: boolean; amount?: number; minSpend?: number; usageLimit?: number | null; description?: string | null; startsAt?: string | null; endsAt?: string | null },
+  ) {
+    const row = await this.promotions.update(id, {
+      active: body.active,
+      amount: body.amount,
+      minSpend: body.minSpend,
+      usageLimit: body.usageLimit,
+      description: body.description,
+      startsAt: body.startsAt === undefined ? undefined : body.startsAt ? new Date(body.startsAt) : null,
+      endsAt: body.endsAt === undefined ? undefined : body.endsAt ? new Date(body.endsAt) : null,
+    });
     return { ...row, amount: money(row.amount), minSpend: money(row.minSpend) };
   }
 }

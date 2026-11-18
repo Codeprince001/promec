@@ -48,6 +48,56 @@ export class CatalogueController {
     return this.catalogue.adminList(query);
   }
 
+  @Get('admin/products/:id')
+  @Permissions('catalogue.manage')
+  adminProduct(@Param('id') id: string) {
+    return this.catalogue.adminOne(id);
+  }
+
+  @Get('admin/manufacturers')
+  @Permissions('catalogue.manage')
+  manufacturers() {
+    return this.catalogue.manufacturers();
+  }
+
+  @Post('admin/categories')
+  @Permissions('catalogue.manage')
+  createCategory(
+    @Body({ schema: z.object({ name: z.string().min(2).max(80), parentId: z.string().uuid().optional(), description: z.string().max(400).optional(), sortOrder: z.number().int().min(0).max(999).optional() }) })
+    body: { name: string; parentId?: string; description?: string; sortOrder?: number },
+  ) {
+    return this.catalogue.createCategory(body);
+  }
+
+  @Patch('admin/categories/:id')
+  @Permissions('catalogue.manage')
+  updateCategory(
+    @Param('id') id: string,
+    @Body({ schema: z.object({ name: z.string().min(2).max(80).optional(), description: z.string().max(400).nullable().optional(), sortOrder: z.number().int().min(0).max(999).optional() }) })
+    body: { name?: string; description?: string | null; sortOrder?: number },
+  ) {
+    return this.catalogue.updateCategory(id, body);
+  }
+
+  @Patch('admin/manufacturers/:id')
+  @Permissions('catalogue.manage')
+  updateManufacturer(
+    @Param('id') id: string,
+    @Body({ schema: z.object({ name: z.string().min(2).max(120).optional(), country: z.string().max(80).nullable().optional(), type: z.enum(['oem', 'aftermarket']).optional() }) })
+    body: { name?: string; country?: string | null; type?: string },
+  ) {
+    return this.catalogue.updateManufacturer(id, body);
+  }
+
+  @Post('admin/manufacturers')
+  @Permissions('catalogue.manage')
+  createManufacturer(
+    @Body({ schema: z.object({ name: z.string().min(2).max(120), country: z.string().max(80).optional(), type: z.enum(['oem', 'aftermarket']).default('aftermarket') }) })
+    body: { name: string; country?: string; type: string },
+  ) {
+    return this.catalogue.createManufacturer(body);
+  }
+
   @Post('admin/products')
   @Permissions('catalogue.manage')
   create(@CurrentUser() user: AuthUser, @Body({ schema: productWriteSchema }) body: z.infer<typeof productWriteSchema>) {

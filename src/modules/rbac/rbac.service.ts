@@ -81,6 +81,14 @@ export class RbacService implements OnModuleInit {
     this.cache.delete(userId);
   }
 
+  async revokeRole(userId: string, roleName: string) {
+    const role = await this.prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) return { revoked: false };
+    await this.prisma.userRole.deleteMany({ where: { userId, roleId: role.id } });
+    this.cache.delete(userId);
+    return { revoked: true };
+  }
+
   async codesForUser(userId: string): Promise<Set<string>> {
     const cached = this.cache.get(userId);
     if (cached && Date.now() - cached.at < 30_000) return cached.codes;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { CurrentUser, type AuthUser } from '../../common/decorators/current-user.decorator';
@@ -46,5 +46,27 @@ export class CompatibilityController {
   @Permissions('compatibility.manage')
   create(@CurrentUser() user: AuthUser, @Body({ schema: writeSchema }) body: z.infer<typeof writeSchema>) {
     return this.compatibility.create({ ...body, actorId: user.sub });
+  }
+
+  @Get('admin')
+  @Permissions('compatibility.manage')
+  list(@Query({ schema: z.object({ productId: z.string().uuid().optional(), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }) }) query: { productId?: string; page: number; pageSize: number }) {
+    return this.compatibility.adminList(query);
+  }
+
+  @Patch('admin/:id')
+  @Permissions('compatibility.manage')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body({ schema: writeSchema.partial() }) body: Partial<z.infer<typeof writeSchema>>,
+  ) {
+    return this.compatibility.update(id, { ...body, actorId: user.sub });
+  }
+
+  @Delete('admin/:id')
+  @Permissions('compatibility.manage')
+  remove(@Param('id') id: string) {
+    return this.compatibility.remove(id);
   }
 }

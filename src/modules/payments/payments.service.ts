@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { ApiException } from '../../common/api.exception';
 import { money } from '../../common/money';
+import { pageMeta } from '../../common/pagination';
 import { AuditService } from '../audit/audit.service';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { PaystackClient } from './paystack.client';
 import { paystackSignature, signaturesMatch } from './paystack.signature';
 
@@ -17,6 +19,7 @@ export class PaymentsService {
     private readonly audit: AuditService,
     private readonly config: ConfigService,
     private readonly paystack: PaystackClient,
+    private readonly settings: SettingsService,
   ) {}
 
   async handleWebhook(
@@ -24,7 +27,7 @@ export class PaymentsService {
     signature: string | undefined,
     body: { event: string; data: { reference: string; amount: number } },
   ) {
-    const secret = this.config.get<string>('PAYSTACK_SECRET_KEY') ?? '';
+    const secret = await this.settings.paystackSecret();
     if (secret) {
       if (!rawBody || !signaturesMatch(paystackSignature(secret, rawBody), signature)) {
         throw new ApiException(HttpStatus.UNAUTHORIZED, 'INVALID_SIGNATURE', 'Webhook signature did not match');
@@ -60,6 +63,63 @@ export class PaymentsService {
     const payment = await this.prisma.payment.findUnique({ where: { providerRef: reference } });
     if (!payment) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Payment reference was not found');
     return this.orders.markPaid(reference, Number(payment.amount));
+  }
+
+  async list(page: number, pageSize: number, status?: string) {
+    const where = status ? { status: status as never } : {};
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.payment.findMany({
+        where,
+        include: { order: { select: { orderNo: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.payment.count({ where }),
+    ]);
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        reference: row.providerRef,
+        provider: row.provider,
+        method: row.method,
+        status: row.status,
+        amount: money(row.amount),
+        orderId: row.orderId,
+        orderNo: row.order.orderNo,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      meta: pageMeta(page, pageSize, total),
+    };
+  }
+
+  async reconcile(days: number) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await this.prisma.payment.findMany({
+      where: { provider: 'paystack', createdAt: { gte: since } },
+      include: { order: { select: { orderNo: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const pending = rows.filter((row) => row.status === 'pending').slice(0, 15);
+    const remote = new Map<string, { status: string; amount: number | null }>();
+    for (const row of pending) {
+      remote.set(row.providerRef, await this.paystack.verify(row.providerRef));
+    }
+    return rows.map((row) => {
+      const checked = remote.get(row.providerRef);
+      const localPaid = row.status === 'paid' || row.status === 'partially_refunded' || row.status === 'refunded';
+      const remotePaid = checked?.status === 'success';
+      return {
+        id: row.id,
+        reference: row.providerRef,
+        orderNo: row.order.orderNo,
+        localStatus: row.status,
+        amount: money(row.amount),
+        paystackStatus: checked?.status ?? (localPaid ? 'not_checked' : 'pending'),
+        mismatch: Boolean(checked && remotePaid !== localPaid),
+      };
+    });
   }
 
   async confirm(reference: string) {

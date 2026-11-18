@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Module, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpStatus, Module, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
+import { ApiException } from '../../common/api.exception';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -24,10 +25,26 @@ export class SuppliersController {
     return this.prisma.supplier.findMany({ orderBy: { legalName: 'asc' } });
   }
 
+  @Get(':id')
+  @Permissions('procurement.manage')
+  async one(@Param('id') id: string) {
+    const row = await this.prisma.supplier.findUnique({ where: { id } });
+    if (!row) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Supplier was not found');
+    return row;
+  }
+
   @Post()
   @Permissions('procurement.manage')
   create(@Body({ schema: supplierSchema }) body: z.infer<typeof supplierSchema>) {
     return this.prisma.supplier.create({ data: { ...body, status: 'approved' } });
+  }
+
+  @Patch(':id')
+  @Permissions('procurement.manage')
+  async update(@Param('id') id: string, @Body({ schema: supplierSchema.partial().extend({ status: z.enum(['pending', 'approved', 'suspended']).optional() }) }) body: Partial<z.infer<typeof supplierSchema>> & { status?: string }) {
+    const current = await this.prisma.supplier.findUnique({ where: { id } });
+    if (!current) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Supplier was not found');
+    return this.prisma.supplier.update({ where: { id }, data: body });
   }
 }
 

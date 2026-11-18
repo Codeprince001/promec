@@ -109,7 +109,7 @@ export class OrdersController {
 
   @Get('admin/returns')
   @Permissions('orders.manage')
-  returns() {
+  returnQueue() {
     return this.orders.listReturns();
   }
 
@@ -117,6 +117,30 @@ export class OrdersController {
   @Permissions('orders.manage')
   admin(@Query({ schema: pageQuery }) query: z.infer<typeof pageQuery>) {
     return this.orders.adminList(query.page, query.pageSize, query.status);
+  }
+
+  @Post('admin/orders')
+  @Permissions('orders.manage')
+  desk(
+    @CurrentUser() user: AuthUser,
+    @Body({ schema: z.object({
+      customerId: z.string().uuid().optional(),
+      contactEmail: z.string().email().optional(),
+      contactPhone: z.string().optional(),
+      address: addressSchema,
+      lines: z.array(z.object({ skuId: z.string().uuid(), qty: z.number().int().positive() })).min(1).max(50),
+      paymentMethod: z.enum(['paystack', 'bank_transfer', 'counter']),
+      notes: z.string().max(500).optional(),
+    }) })
+    body: { customerId?: string; contactEmail?: string; contactPhone?: string; address: z.infer<typeof addressSchema>; lines: { skuId: string; qty: number }[]; paymentMethod: 'paystack' | 'bank_transfer' | 'counter'; notes?: string },
+  ) {
+    return this.orders.deskOrder(user.sub, body);
+  }
+
+  @Get('admin/orders/:id')
+  @Permissions('orders.manage')
+  adminOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.orders.one(id, user.sub, true);
   }
 
   @Post('admin/returns/:id/decision')

@@ -83,5 +83,21 @@ export class PartRequestsController {
   }
 }
 
-@Module({ controllers: [PartRequestsController] })
+@ApiTags('part-requests')
+@Controller()
+export class PartRequestsAdminController {
+  constructor(private readonly prisma: PrismaService) {}
+
+  @Get('admin/part-requests')
+  @Permissions('procurement.manage')
+  queue() {
+    return this.prisma.partRequest.findMany({
+      include: { customer: { select: { firstName: true, lastName: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+}
+
+@Module({ controllers: [PartRequestsController, PartRequestsAdminController] })
 export class PartRequestsModule {}

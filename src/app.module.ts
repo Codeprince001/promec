@@ -19,6 +19,7 @@ import { B2bModule } from './modules/b2b/b2b.module';
 import { CartModule } from './modules/cart/cart.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { CompatibilityModule } from './modules/compatibility/compatibility.module';
+import { ExportsModule } from './modules/exports/exports.module';
 import { HealthModule } from './modules/health/health.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -29,6 +30,7 @@ import { ProcurementModule } from './modules/procurement/procurement.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { SearchModule } from './modules/search/search.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { ShippingModule } from './modules/shipping/shipping.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { SupportModule } from './modules/support/support.module';
@@ -51,6 +53,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     PrismaModule,
     CryptoModule,
+    SettingsModule,
     QueueModule,
     AuditModule,
     NotificationsModule,
@@ -74,6 +77,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ProcurementModule,
     B2bModule,
     AnalyticsModule,
+    ExportsModule,
     AiModule,
     HealthModule,
   ],

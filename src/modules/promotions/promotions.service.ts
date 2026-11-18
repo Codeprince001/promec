@@ -40,8 +40,8 @@ export class PromotionsService {
     return this.prisma.promotion.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
-  update(id: string, active: boolean) {
-    return this.prisma.promotion.update({ where: { id }, data: { active } });
+  update(id: string, input: { active?: boolean; amount?: number; minSpend?: number; usageLimit?: number | null; description?: string | null; startsAt?: Date | null; endsAt?: Date | null }) {
+    return this.prisma.promotion.update({ where: { id }, data: input });
   }
 
   create(input: { code: string; type: 'percent' | 'fixed'; amount: number; minSpend?: number; usageLimit?: number; description?: string }) {

@@ -19,6 +19,28 @@ export class InventoryService {
     });
   }
 
+  async saveWarehouse(input: { id?: string; code: string; name: string; address?: string | null; state?: string | null; isActive?: boolean }) {
+    if (input.id) {
+      const current = await this.prisma.warehouse.findUnique({ where: { id: input.id } });
+      if (!current) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Warehouse was not found');
+      return this.prisma.warehouse.update({
+        where: { id: input.id },
+        data: { code: input.code, name: input.name, address: input.address, state: input.state, isActive: input.isActive },
+      });
+    }
+    return this.prisma.warehouse.create({
+      data: { code: input.code, name: input.name, address: input.address, state: input.state, isActive: input.isActive ?? true },
+    });
+  }
+
+  listWarehouses(warehouseIds: string[] | null) {
+    return this.prisma.warehouse.findMany({
+      where: { isActive: true, ...(warehouseIds ? { id: { in: warehouseIds } } : {}) },
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true, state: true },
+    });
+  }
+
   async adjust(skuId: string, qtyDelta: number, reason: string, userId: string, warehouseIds: string[] | null = null) {
     const warehouse = warehouseIds
       ? await this.prisma.warehouse.findFirst({ where: { id: { in: warehouseIds }, isActive: true }, orderBy: { code: 'asc' } })

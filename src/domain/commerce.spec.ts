@@ -1,4 +1,4 @@
-import { assertVin, chooseWarehouse, commissionAmount, matchVariant, tradeUnitPrice } from './commerce';
+import { assertVin, chooseWarehouse, commissionAmount, matchVariant, tradeUnitPrice, withdrawableBalance } from './commerce';
 
 describe('commerce', () => {
   it('reserves from the warehouse in the delivery state when it can fill the line', () => {
@@ -39,5 +39,10 @@ describe('commerce', () => {
 
   it('calculates vendor commission on merchandise', () => {
     expect(commissionAmount(48500, 0.12)).toBe(5820);
+  });
+
+  it('keeps requested withdrawals out of the amount a vendor can take', () => {
+    expect(withdrawableBalance(20000, 7500)).toBe(12500);
+    expect(withdrawableBalance(4000, 6000)).toBe(0);
   });
 });

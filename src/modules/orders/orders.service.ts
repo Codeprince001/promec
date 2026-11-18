@@ -14,6 +14,7 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { AuditService } from '../audit/audit.service';
 import { CreditService } from '../b2b/credit.service';
 import { PaystackClient } from '../payments/paystack.client';
+import { SettingsService } from '../settings/settings.service';
 import { CartService } from '../cart/cart.service';
 import { CompatibilityService } from '../compatibility/compatibility.service';
 import { InventoryService } from '../inventory/inventory.service';
@@ -64,6 +65,7 @@ export class OrdersService implements OnModuleInit {
     private readonly analytics: AnalyticsService,
     private readonly vendors: VendorCommerceService,
     private readonly outbox: OutboxService,
+    private readonly settings: SettingsService,
   ) {}
 
   onModuleInit() {
@@ -82,7 +84,7 @@ export class OrdersService implements OnModuleInit {
     const customer = input.userId ? await this.prisma.customer.findUnique({ where: { userId: input.userId } }) : null;
     const account = input.userId ? await this.prisma.user.findUnique({ where: { id: input.userId } }) : null;
     const contactEmail = input.contactEmail ?? account?.email ?? undefined;
-    const guestAllowed = this.config.get('FEATURE_GUEST_CHECKOUT') === 'true';
+    const guestAllowed = await this.settings.guestCheckoutEnabled();
     if (!customer && !guestAllowed) {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'UNAUTHENTICATED', 'Sign in to check out');
     }
@@ -258,12 +260,13 @@ export class OrdersService implements OnModuleInit {
     }
     if (input.paymentMethod === 'bank_transfer') {
       const reference = body.payments[0]?.reference;
+      const bank = await this.settings.bankDetails();
       return {
         ...body,
         bankTransfer: {
-          accountName: this.config.get<string>('BANK_ACCOUNT_NAME') ?? 'PROMEC Limited',
-          bankName: this.config.get<string>('BANK_NAME') ?? '',
-          accountNumber: this.config.get<string>('BANK_ACCOUNT_NUMBER') ?? '',
+          accountName: bank.accountName,
+          bankName: bank.bankName,
+          accountNumber: bank.accountNumber,
           reference,
           amount: body.grandTotal,
           proofUrl: reference ? `/api/v1/payments/${reference}/proof` : null,
@@ -325,6 +328,92 @@ export class OrdersService implements OnModuleInit {
       this.prisma.order.count({ where }),
     ]);
     return { data: rows.map(presentOrder), meta: pageMeta(page, pageSize, total) };
+  }
+
+  async deskOrder(actorId: string, input: {
+    customerId?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    address: { recipient: string; phone: string; state: string; lga?: string; city: string; street: string; landmark?: string };
+    lines: { skuId: string; qty: number }[];
+    paymentMethod: 'paystack' | 'bank_transfer' | 'counter';
+    notes?: string;
+  }) {
+    if (!input.customerId && !input.contactEmail) {
+      throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR', 'A counter order needs a customer or an email');
+    }
+    const customer = input.customerId ? await this.prisma.customer.findUnique({ where: { id: input.customerId }, include: { user: true } }) : null;
+    if (input.customerId && !customer) throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Customer was not found');
+    const skus = await this.prisma.productSku.findMany({
+      where: { id: { in: input.lines.map((line) => line.skuId) } },
+      include: { product: true },
+    });
+    const byId = new Map(skus.map((sku) => [sku.id, sku]));
+    const lines = input.lines.map((line) => {
+      const sku = byId.get(line.skuId);
+      if (!sku || sku.product.deletedAt || sku.product.status === 'archived') {
+        throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'A part on this order is not for sale');
+      }
+      return { sku, qty: line.qty };
+    });
+    const subtotal = lines.reduce((sum, line) => sum + moneyNumber(line.sku.sellingPrice) * line.qty, 0);
+    const weight = lines.reduce((sum, line) => sum + line.sku.weightG * line.qty, 0);
+    const quote = await this.shipping.quote(input.address.state, weight, 'courier');
+    const shippingTotal = Number(quote.amount);
+    const grand = Math.max(0, subtotal + shippingTotal);
+    const orderNo = referenceCode('PRM');
+    const providerRef = referenceCode('PAY');
+    const contactEmail = input.contactEmail ?? customer?.user.email ?? undefined;
+    const created = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          orderNo,
+          customerId: customer?.id,
+          contactEmail,
+          contactPhone: input.contactPhone ?? input.address.phone,
+          status: 'pending_payment',
+          subtotal,
+          discountTotal: 0,
+          shippingTotal,
+          grandTotal: grand,
+          deliveryMethod: 'courier',
+          courierCode: quote.courier,
+          shippingAddress: input.address,
+          notes: input.notes ? `Counter sale. ${input.notes}` : 'Counter sale',
+          items: {
+            create: lines.map((line) => ({
+              skuId: line.sku.id,
+              qty: line.qty,
+              unitPrice: moneyNumber(line.sku.sellingPrice),
+              warrantyMonths: line.sku.product.warrantyMonths,
+            })),
+          },
+          payments: {
+            create: {
+              provider: input.paymentMethod === 'paystack' ? 'paystack' : input.paymentMethod === 'counter' ? 'counter' : 'bank_transfer',
+              providerRef,
+              amount: grand,
+              currency: 'NGN',
+              method: input.paymentMethod,
+              status: 'pending',
+            },
+          },
+        },
+        include: { items: true },
+      });
+      for (const item of order.items) {
+        const stock = await this.inventory.reserve(tx, item.skuId, item.qty, input.address.state);
+        await tx.inventoryReservation.create({
+          data: { inventoryId: stock.id, orderItemId: item.id, qty: item.qty, expiresAt: new Date(Date.now() + 30 * 60_000) },
+        });
+      }
+      return order;
+    });
+    await this.audit.log({ actorId, action: 'order.desk', entityType: 'order', entityId: created.id, after: { orderNo, paymentMethod: input.paymentMethod } });
+    if (input.paymentMethod === 'counter') {
+      return this.markPaid(providerRef, grand);
+    }
+    return this.one(created.id, actorId, true);
   }
 
   async cancelMine(id: string, userId: string) {

@@ -5,17 +5,9 @@ import { decideFitment } from '../../domain/fitment';
 import { looksLikePartNumber, normalizePartNumber } from '../../domain/part-number';
 import { OutboxService } from '../../infra/outbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { presentProduct } from '../catalogue/catalogue.service';
+import { presentProduct, productInclude } from '../catalogue/catalogue.service';
 import { CompatibilityService } from '../compatibility/compatibility.service';
 import { ProductIndex } from './product-index';
-
-const include = {
-  manufacturer: true,
-  category: true,
-  skus: { include: { inventory: true } },
-  media: { orderBy: { sortOrder: 'asc' as const } },
-  partNumbers: true,
-} satisfies Prisma.ProductInclude;
 
 @Injectable()
 export class SearchService implements OnModuleInit {
@@ -40,7 +32,7 @@ export class SearchService implements OnModuleInit {
           if (!indexed.ids.length) return { data: [], meta: pageMeta(query.page, query.pageSize, indexed.total) };
           const rows = await this.prisma.product.findMany({
             where: { id: { in: indexed.ids }, status: 'published', deletedAt: null },
-            include,
+            include: productInclude,
           });
           const byId = new Map(rows.map((row) => [row.id, row]));
           const results = indexed.ids.flatMap((id) => {
@@ -73,7 +65,7 @@ export class SearchService implements OnModuleInit {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.product.findMany({
         where,
-        include,
+        include: productInclude,
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
         orderBy: query.sort === 'newest' ? { createdAt: 'desc' } : { name: 'asc' },

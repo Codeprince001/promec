@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { money } from '../../common/money';
@@ -26,6 +26,7 @@ export class InventoryController {
     const rows = await this.inventory.list(await this.rbac.warehouseIds(user.sub, 'inventory.manage'));
     return rows.map((row) => ({
       id: row.id,
+      skuId: row.skuId,
       sku: row.sku.sku,
       product: row.sku.product.name,
       warehouse: row.warehouse.code,
@@ -47,6 +48,31 @@ export class InventoryController {
     return this.rbac.warehouseIds(user.sub, 'inventory.manage').then((warehouseIds) =>
       this.inventory.adjust(skuId, body.qtyDelta, body.reason, user.sub, warehouseIds),
     );
+  }
+
+  @Get('warehouses')
+  @Permissions('inventory.manage')
+  warehouses(@CurrentUser() user: AuthUser) {
+    return this.rbac.warehouseIds(user.sub, 'inventory.manage').then((warehouseIds) => this.inventory.listWarehouses(warehouseIds));
+  }
+
+  @Post('warehouses')
+  @Permissions('inventory.manage')
+  createWarehouse(
+    @Body({ schema: z.object({ code: z.string().min(2).max(12), name: z.string().min(2).max(80), address: z.string().max(200).optional(), state: z.string().max(40).optional(), isActive: z.boolean().optional() }) })
+    body: { code: string; name: string; address?: string; state?: string; isActive?: boolean },
+  ) {
+    return this.inventory.saveWarehouse(body);
+  }
+
+  @Patch('warehouses/:id')
+  @Permissions('inventory.manage')
+  updateWarehouse(
+    @Param('id') id: string,
+    @Body({ schema: z.object({ code: z.string().min(2).max(12), name: z.string().min(2).max(80), address: z.string().max(200).nullable().optional(), state: z.string().max(40).nullable().optional(), isActive: z.boolean().optional() }) })
+    body: { code: string; name: string; address?: string | null; state?: string | null; isActive?: boolean },
+  ) {
+    return this.inventory.saveWarehouse({ ...body, id });
   }
 
   @Get('transfers')

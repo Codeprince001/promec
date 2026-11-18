@@ -78,6 +78,18 @@ export class PaymentsController {
     return this.payments.rejectProof(id, user.sub, body.note);
   }
 
+  @Get('admin/payments')
+  @Permissions('payments.manage')
+  list(@Query({ schema: z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20), status: z.string().optional() }) }) query: { page: number; pageSize: number; status?: string }) {
+    return this.payments.list(query.page, query.pageSize, query.status);
+  }
+
+  @Get('admin/payments/reconciliation')
+  @Permissions('payments.manage')
+  reconcile(@Query({ schema: z.object({ days: z.coerce.number().int().min(1).max(90).default(7) }) }) query: { days: number }) {
+    return this.payments.reconcile(query.days);
+  }
+
   @Post('admin/payments/:reference/confirm')
   @Permissions('payments.manage')
   confirm(@Param('reference') reference: string) {

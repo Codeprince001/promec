@@ -77,6 +77,30 @@ export class NotificationsService {
     }
   }
 
+  inbox(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { id: true, channel: true, template: true, status: true, createdAt: true, readAt: true, sentAt: true },
+    });
+  }
+
+  async markRead(userId: string, id: string) {
+    const row = await this.prisma.notification.updateMany({ where: { id, userId }, data: { readAt: new Date() } });
+    if (!row.count) return { read: false };
+    return { read: true };
+  }
+
+  deliveryQueue(status?: string) {
+    return this.prisma.notification.findMany({
+      where: status ? { status } : { status: { in: ['queued', 'failed'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: { id: true, userId: true, channel: true, template: true, status: true, attempts: true, lastError: true, createdAt: true },
+    });
+  }
+
   async dispatchQueued() {
     if (!this.prisma.ready) return 0;
     const rows = await this.prisma.notification.findMany({
