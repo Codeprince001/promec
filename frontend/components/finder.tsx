@@ -89,10 +89,10 @@ export function VehicleFinder() {
   }
 
   return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm">
+    <div className="rounded-3xl bg-card p-5 shadow-sm">
       <div className="flex gap-2 text-sm">
         {(['vehicle', 'vin', 'part'] as const).map((item) => (
-          <button key={item} type="button" className={tab === item ? 'inline-flex min-h-11 items-center rounded-full bg-[#163A70] px-4 text-sm text-white' : 'inline-flex min-h-11 items-center rounded-full px-4 text-sm text-[#163A70]'} onClick={() => setTab(item)}>
+          <button key={item} type="button" className={tab === item ? 'inline-flex min-h-11 items-center rounded-full bg-navy px-4 text-sm text-white' : 'inline-flex min-h-11 items-center rounded-full px-4 text-sm text-link'} onClick={() => setTab(item)}>
             {item === 'vehicle' ? 'Vehicle' : item === 'vin' ? 'VIN' : 'Part number'}
           </button>
         ))}
@@ -105,19 +105,19 @@ export function VehicleFinder() {
           <Select label="Year" value={year} onChange={(value) => { setYear(value); setEngineId(''); setVariantId(''); }} options={years.map((item) => ({ value: String(item), label: String(item) }))} />
           <Select label="Engine" value={engineId} onChange={setEngineId} options={engines.map((item) => ({ value: item.id, label: [item.code, item.fuelType, item.displacementCc ? `${item.displacementCc}cc` : ''].filter(Boolean).join(' · ') }))} />
           {variants.length > 1 ? <Select label="Variant" value={variantId} onChange={setVariantId} options={variants.map((item) => ({ value: item.id, label: item.name || `${item.yearFrom}–${item.yearTo}` }))} /> : null}
-          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-4 font-medium text-white sm:col-span-2" type="submit">Find parts</button>
+          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-4 font-medium text-white sm:col-span-2" type="submit">Find parts</button>
         </form>
       ) : null}
       {tab === 'vin' ? (
         <form onSubmit={decode} className="mt-4 flex flex-wrap gap-3">
           <input className="control min-w-0 flex-1 uppercase" value={vin} onChange={(event) => setVin(event.target.value)} placeholder="17-character VIN" maxLength={17} />
-          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-4 font-medium text-white" type="submit">Decode</button>
+          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-4 font-medium text-white" type="submit">Decode</button>
         </form>
       ) : null}
       {tab === 'part' ? (
         <form onSubmit={(event) => { event.preventDefault(); router.push(`/search?q=${encodeURIComponent(part)}`); }} className="mt-4 flex flex-wrap gap-3">
           <input className="control min-w-0 flex-1" value={part} onChange={(event) => setPart(event.target.value)} placeholder="OEM or aftermarket number" />
-          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-4 font-medium text-white" type="submit">Search</button>
+          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-4 font-medium text-white" type="submit">Search</button>
         </form>
       ) : null}
       <SignedHint />
@@ -140,5 +140,5 @@ function Select({ label, value, onChange, options }: { label: string; value: str
 function SignedHint() {
   const token = useSession((state) => state.token);
   if (token) return null;
-  return <p className="mt-3 text-xs text-[#0E1B2C]/60">A saved garage is available after you <Link className="underline" href="/login">sign in</Link>.</p>;
+  return <p className="mt-3 text-xs text-ink/60">A saved garage is available after you <Link className="underline" href="/login">sign in</Link>.</p>;
 }

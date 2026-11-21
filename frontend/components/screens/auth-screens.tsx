@@ -79,7 +79,7 @@ export function LoginScreen() {
           <Button type="submit">Sign in</Button>
         </form>
       )}
-      <p className="text-sm"><Link className="text-[#163A70] underline" href="/register">Create an account</Link> · <Link className="text-[#163A70] underline" href="/forgot-password">Forgot password</Link></p>
+      <p className="text-sm"><Link className="text-link underline" href="/register">Create an account</Link> · <Link className="text-link underline" href="/forgot-password">Forgot password</Link></p>
     </AuthCard>
   );
 }
@@ -109,7 +109,7 @@ export function RegisterScreen() {
       <form onSubmit={submit} className="grid gap-3">
         <div className="flex flex-wrap gap-2 text-sm">
           {(['individual', 'mechanic', 'business_member'] as const).map((type) => (
-            <button key={type} type="button" className={form.customerType === type ? 'inline-flex min-h-11 items-center rounded-full bg-[#163A70] px-4 text-white' : 'inline-flex min-h-11 items-center rounded-full px-4 text-[#163A70]'} onClick={() => setForm({ ...form, customerType: type })}>{type === 'business_member' ? 'Business' : type}</button>
+            <button key={type} type="button" className={form.customerType === type ? 'inline-flex min-h-11 items-center rounded-full bg-navy px-4 text-white' : 'inline-flex min-h-11 items-center rounded-full px-4 text-link'} onClick={() => setForm({ ...form, customerType: type })}>{type === 'business_member' ? 'Business' : type}</button>
           ))}
         </div>
         <Field placeholder="First name" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} />
@@ -171,7 +171,7 @@ export function VerifyScreen() {
 function AuthCard({ kicker, title, lede, children }: { kicker: string; title: string; lede?: string; children: React.ReactNode }) {
   return (
     <Page width="md">
-      <div className="grid gap-4 rounded-2xl bg-white p-5 sm:p-6">
+      <div className="grid gap-4 rounded-2xl bg-card p-5 sm:p-6">
         <PageHead kicker={kicker} title={title} lede={lede} />
         {children}
       </div>

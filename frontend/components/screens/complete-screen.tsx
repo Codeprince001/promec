@@ -50,7 +50,7 @@ export function CompleteScreen() {
       <PageHead kicker="Checkout" title={`Order ${order.orderNo}`} lede={`Status ${order.status.replaceAll('_', ' ')} · payment ${order.paymentStatus.replaceAll('_', ' ')} · ${naira(order.grandTotal)}`} />
       {order.bankTransfer ? (
         <Card className="mt-6">
-          <h2 className="display text-3xl text-[#163A70]">Transfer {naira(order.bankTransfer.amount)}</h2>
+          <h2 className="display text-3xl text-link">Transfer {naira(order.bankTransfer.amount)}</h2>
           <p className="mt-2">{order.bankTransfer.accountName}</p>
           <p>{order.bankTransfer.bankName} · {order.bankTransfer.accountNumber}</p>
           <p>Reference {order.bankTransfer.reference}</p>
@@ -63,7 +63,7 @@ export function CompleteScreen() {
         </Card>
       ) : null}
       {message ? <div className="mt-4"><Notice>{message}</Notice></div> : null}
-      <Link className="mt-6 inline-flex min-h-11 items-center text-[#163A70]" href={`/account/orders/${order.id}`}>View this order</Link>
+      <Link className="mt-6 inline-flex min-h-11 items-center text-link" href={`/account/orders/${order.id}`}>View this order</Link>
     </Page>
   );
 }

@@ -1,8 +1,41 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --paper: #f4f1ec;
-  --ink: #0e1b2c;
+  color-scheme: light;
+  --paper: #f6f3ee;
+  --ink: #142033;
+  --card: #ffffff;
+  --navy: #001e54;
+  --link: #0b3f86;
+  --brand: #c2410c;
+  --accent: #c2410c;
+  --flare: #ff8a3d;
+  --gold: #7e93b0;
+  --panel: #071428;
+  --header: #fffdfb;
+  --on-header: #071428;
+  --hero: #06101c;
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+.dark {
+  color-scheme: dark;
+  --paper: #070e18;
+  --ink: #f6f1e8;
+  --card: #122033;
+  --navy: #1a4a86;
+  --link: #b9d2ff;
+  --brand: #c2410c;
+  --accent: #ff8a3d;
+  --flare: #ff8a3d;
+  --gold: #8eadd4;
+  --panel: #183056;
+  --header: #050b14;
+  --on-header: #f6f1e8;
+  --hero: #050b14;
   --background: var(--paper);
   --foreground: var(--ink);
 }
@@ -10,30 +43,79 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-card: var(--card);
+  --color-navy: var(--navy);
+  --color-link: var(--link);
+  --color-brand: var(--brand);
+  --color-accent: var(--accent);
+  --color-flare: var(--flare);
+  --color-gold: var(--gold);
+  --color-panel: var(--panel);
+  --color-header: var(--header);
+  --color-on-header: var(--on-header);
+  --color-hero: var(--hero);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  overflow-x: clip;
+}
+
 body {
-  background: var(--paper);
+  background:
+    radial-gradient(880px 420px at 110% -8%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+    radial-gradient(720px 380px at -12% -6%, color-mix(in srgb, var(--navy) 14%, transparent), transparent 58%),
+    var(--paper);
   color: var(--ink);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-  overflow-x: clip;
+}
+
+.site-header,
+.site-footer {
+  background: var(--header);
+  color: var(--on-header);
+}
+
+.site-header {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.site-footer {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 1rem;
+  line-height: 0;
+}
+
+.dark .logo-mark {
+  padding: 0.2rem 0.7rem 0.15rem;
+  background: linear-gradient(180deg, #fffdfb 0%, #f4ece3 100%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 85%, white),
+    0 12px 32px color-mix(in srgb, #ff6800 42%, transparent);
 }
 
 .control {
   min-height: 2.75rem;
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid rgb(196 165 116 / 0.6);
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  background: var(--card);
   padding: 0.5rem 0.75rem;
-  color: #0e1b2c;
+  color: var(--ink);
   outline: none;
 }
 
 .control:focus {
-  border-color: #163a70;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 textarea.control {
@@ -45,4 +127,8 @@ textarea.control {
   font-style: italic;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.text-flare {
+  color: var(--flare);
 }

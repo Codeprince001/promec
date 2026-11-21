@@ -39,11 +39,11 @@ export function StoreView({ slug }: { slug: string }) {
       {!store && !error ? <p className="mx-auto max-w-6xl px-4 py-16">Loading store…</p> : null}
       {store ? (
         <>
-          <section className="bg-[#163A70] text-white">
+          <section className="bg-navy text-white">
             {store.bannerUrl ? <img src={store.bannerUrl} alt="" className="h-48 w-full object-cover md:h-64" /> : <div className="h-36" />}
             <div className="mx-auto flex max-w-6xl items-end gap-5 px-4 pb-8">
-              <div className="-mt-12 flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-[#0E1B2C]">
-                {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-cover" /> : <span className="text-2xl font-semibold text-[#F15A24]">{store.businessName.slice(0, 1)}</span>}
+              <div className="-mt-12 flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-panel">
+                {store.logoUrl ? <img src={store.logoUrl} alt="" className="h-full w-full object-cover" /> : <span className="text-2xl font-semibold text-flare">{store.businessName.slice(0, 1)}</span>}
               </div>
               <div className="pb-1">
                 <h1 className="display text-4xl">{store.businessName}</h1>
@@ -58,26 +58,26 @@ export function StoreView({ slug }: { slug: string }) {
           <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[2fr_1fr]">
             <section>
               <h2 className="text-xl font-semibold">Parts from this store</h2>
-              {products.length === 0 ? <p className="mt-4 text-[#0E1B2C]/70">No published parts yet.</p> : null}
+              {products.length === 0 ? <p className="mt-4 text-ink/70">No published parts yet.</p> : null}
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {products.map((product) => {
                   const price = product.skus[0]?.price.amount;
                   const stock = product.skus[0]?.availability;
                   return (
-                    <a key={product.slug} href={`/products/${product.slug}`} className="rounded-2xl bg-white p-4 shadow-sm">
+                    <a key={product.slug} href={`/products/${product.slug}`} className="rounded-2xl bg-card p-4 shadow-sm">
                       {product.media[0] ? <img src={product.media[0].url} alt={product.media[0].alt ?? ''} className="mb-3 h-36 w-full rounded-xl object-cover" /> : null}
                       <p className="font-medium">{product.name}</p>
-                      <p className="mt-2 text-[#F15A24]">{price ? naira(price) : ''}</p>
-                      <p className="text-sm text-[#0E1B2C]/60">{stock?.qty ? `${stock.qty} in stock` : 'Out of stock'}</p>
+                      <p className="mt-2 text-accent">{price ? naira(price) : ''}</p>
+                      <p className="text-sm text-ink/60">{stock?.qty ? `${stock.qty} in stock` : 'Out of stock'}</p>
                     </a>
                   );
                 })}
               </div>
               <h2 className="mt-10 text-xl font-semibold">Ratings</h2>
               <div className="mt-4 space-y-3">
-                {reviews.length === 0 ? <p className="text-[#0E1B2C]/70">Buyers have not rated this store yet.</p> : null}
+                {reviews.length === 0 ? <p className="text-ink/70">Buyers have not rated this store yet.</p> : null}
                 {reviews.map((review) => (
-                  <article key={review.id} className="rounded-2xl bg-white p-4">
+                  <article key={review.id} className="rounded-2xl bg-card p-4">
                     <p className="text-sm font-medium">{review.author} · {review.rating}/5</p>
                     {review.comment ? <p className="mt-2">{review.comment}</p> : null}
                   </article>
@@ -99,9 +99,9 @@ export function StoreView({ slug }: { slug: string }) {
 
 function Info({ title, body, extra }: { title: string; body: string; extra?: string }) {
   return (
-    <section className="rounded-2xl bg-white p-5">
+    <section className="rounded-2xl bg-card p-5">
       <h2 className="font-semibold">{title}</h2>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#0E1B2C]/80">{body}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink/80">{body}</p>
       {extra ? <p className="mt-2 text-sm">{extra}</p> : null}
     </section>
   );
@@ -155,9 +155,9 @@ function ReviewBox({ slug, onCreated }: { slug: string; onCreated: (review: Stor
   }
 
   return (
-    <section className="mt-6 rounded-2xl bg-white p-5">
+    <section className="mt-6 rounded-2xl bg-card p-5">
       <h2 className="font-semibold">Rate this store</h2>
-      <p className="mt-1 text-sm text-[#0E1B2C]/70">A rating is available after PROMEC marks your order delivered.</p>
+      <p className="mt-1 text-sm text-ink/70">A rating is available after PROMEC marks your order delivered.</p>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
       {!token ? (
         <form onSubmit={signIn} className="mt-4 grid gap-3">
@@ -180,4 +180,4 @@ function ReviewBox({ slug, onCreated }: { slug: string; onCreated: (review: Stor
 }
 
 const field = 'control';
-const button = 'inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-5 text-sm font-medium text-white';
+const button = 'inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-medium text-white';

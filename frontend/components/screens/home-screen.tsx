@@ -17,8 +17,8 @@ const steps = [
 const fitment = [
   { title: 'Confirmed', body: 'A catalogue record matches this vehicle.', mark: 'bg-emerald-500' },
   { title: 'Probable', body: 'The record is close. Read the note before you buy.', mark: 'bg-amber-400' },
-  { title: 'Unverified', body: 'No fitment record yet. Ask PROMEC before fitting.', mark: 'bg-[#C4A574]' },
-  { title: 'Incompatible', body: 'This part is recorded as the wrong vehicle.', mark: 'bg-[#F15A24]' },
+  { title: 'Unverified', body: 'No fitment record yet. Ask PROMEC before fitting.', mark: 'bg-gold' },
+  { title: 'Incompatible', body: 'This part is recorded as the wrong vehicle.', mark: 'bg-brand' },
 ];
 
 export function HomeScreen() {
@@ -32,12 +32,12 @@ export function HomeScreen() {
 
   return (
     <main>
-      <section className="relative overflow-hidden bg-black text-white">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_78%_42%,rgba(22,58,112,0.95),transparent_55%)]" />
-        <div className="pointer-events-none absolute -left-24 top-8 h-56 w-56 rounded-full bg-[#F15A24]/20 blur-3xl" />
+      <section className="relative overflow-hidden bg-hero text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_78%_42%,rgba(0,30,84,0.92),transparent_58%)]" />
+        <div className="pointer-events-none absolute -left-16 top-6 h-64 w-64 rounded-full bg-[#ff8a3d]/30 blur-3xl" />
         <div className="relative mx-auto grid max-w-6xl items-center gap-2 px-4 pt-8 md:grid-cols-[1.05fr_0.95fr] md:pt-12">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-[#F15A24]">Lagos parts desk</p>
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-flare">Lagos parts desk</p>
             <h1 className="display mt-3 text-5xl leading-[0.88] sm:text-6xl lg:text-7xl">
               The right part for the vehicle in front of you.
             </h1>
@@ -52,7 +52,7 @@ export function HomeScreen() {
         </div>
       </section>
 
-      <section className="border-b border-[#C4A574]/40 bg-white">
+      <section className="border-b border-gold/40 bg-card">
         <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 text-sm sm:grid-cols-3">
           <Fact kicker="Prices" body="Listed in naira. Supplier cost stays on the purchase side." />
           <Fact kicker="Stock" body="One Lagos warehouse at launch, reserved when you check out." />
@@ -63,25 +63,25 @@ export function HomeScreen() {
       <section className="mx-auto max-w-6xl px-4 py-12">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">Catalogue</p>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">Catalogue</p>
             <h2 className="display mt-1 text-4xl">Start with the part group.</h2>
           </div>
-          <Link href="/categories" className="text-sm text-[#163A70] underline">All categories</Link>
+          <Link href="/categories" className="text-sm text-link underline">All categories</Link>
         </div>
         {categories.isError ? <p className="mt-3">{categories.error.message}</p> : null}
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {roots.map((category) => (
-            <Link key={category.id} href={`/categories/${category.slug}`} className="group rounded-2xl border border-[#C4A574]/40 bg-white px-5 py-6 transition hover:-translate-y-0.5 hover:border-[#F15A24]">
-              <p className="text-xs uppercase tracking-[0.16em] text-[#F15A24]">Shop</p>
-              <p className="display mt-2 text-3xl text-[#163A70] group-hover:text-[#F15A24]">{category.name}</p>
+            <Link key={category.id} href={`/categories/${category.slug}`} className="group rounded-2xl border border-gold/40 bg-card px-5 py-6 transition hover:-translate-y-0.5 hover:border-brand">
+              <p className="text-xs uppercase tracking-[0.16em] text-accent">Shop</p>
+              <p className="display mt-2 text-3xl text-link group-hover:text-accent">{category.name}</p>
             </Link>
           ))}
         </div>
       </section>
 
-      <section className="bg-[#163A70] text-white">
+      <section className="bg-navy text-white">
         <div className="mx-auto max-w-6xl px-4 py-12">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">Fitment</p>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-flare">Fitment</p>
           <h2 className="display mt-1 max-w-xl text-4xl">Four answers. The catalogue decides, not the search box.</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {fitment.map((item) => (
@@ -96,14 +96,14 @@ export function HomeScreen() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-12">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">From the desk</p>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">From the desk</p>
         <h2 className="display mt-1 text-4xl">How an order moves.</h2>
         <ol className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((step) => (
-            <li key={step.n} className="rounded-2xl bg-white p-5">
-              <p className="display text-3xl text-[#F15A24]">{step.n}</p>
-              <h3 className="mt-2 font-semibold text-[#163A70]">{step.title}</h3>
-              <p className="mt-1 text-sm text-[#0E1B2C]/75">{step.body}</p>
+            <li key={step.n} className="rounded-2xl bg-card p-5">
+              <p className="display text-3xl text-accent">{step.n}</p>
+              <h3 className="mt-2 font-semibold text-link">{step.title}</h3>
+              <p className="mt-1 text-sm text-ink/75">{step.body}</p>
             </li>
           ))}
         </ol>
@@ -132,18 +132,18 @@ function HeroCar({ className = '' }: { className?: string }) {
 function Fact({ kicker, body }: { kicker: string; body: string }) {
   return (
     <p>
-      <span className="font-semibold text-[#163A70]">{kicker}. </span>
-      <span className="text-[#0E1B2C]/75">{body}</span>
+      <span className="font-semibold text-link">{kicker}. </span>
+      <span className="text-ink/75">{body}</span>
     </p>
   );
 }
 
 function Panel({ title, body, href, label }: { title: string; body: string; href: string; label: string }) {
   return (
-    <article className="rounded-2xl bg-[#0E1B2C] p-5 text-white">
+    <article className="rounded-2xl bg-panel p-5 text-white">
       <h2 className="display text-2xl">{title}</h2>
       <p className="mt-2 text-sm text-white/75">{body}</p>
-      <Link href={href} className="mt-4 inline-block text-sm text-[#F15A24]">{label}</Link>
+      <Link href={href} className="mt-4 inline-block text-sm text-flare">{label}</Link>
     </article>
   );
 }

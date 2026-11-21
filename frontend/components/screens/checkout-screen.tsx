@@ -112,11 +112,11 @@ export function CheckoutScreen() {
           <Button disabled={busy} type="submit">{busy ? 'Placing order…' : 'Place order'}</Button>
         </div>
         <Card className="h-fit">
-          <h2 className="display text-3xl text-[#163A70]">Order</h2>
+          <h2 className="display text-3xl text-link">Order</h2>
           <p className="mt-3">Parts {naira(cart.data?.data.subtotal)}</p>
           <p>Delivery {quote.data ? naira(quote.data.amount) : '—'}</p>
-          {quote.data?.zone ? <p className="text-sm text-[#0E1B2C]/70">{quote.data.zone}{quote.data.etaDays != null ? ` · about ${quote.data.etaDays} days` : ''}</p> : null}
-          <p className="mt-3 text-sm text-[#0E1B2C]/70">The checkout total includes trade prices, coupons, and the delivery fee PROMEC calculates. A live courier quote falls back to the local tariff when the carrier is not connected.</p>
+          {quote.data?.zone ? <p className="text-sm text-ink/70">{quote.data.zone}{quote.data.etaDays != null ? ` · about ${quote.data.etaDays} days` : ''}</p> : null}
+          <p className="mt-3 text-sm text-ink/70">The checkout total includes trade prices, coupons, and the delivery fee PROMEC calculates. A live courier quote falls back to the local tariff when the carrier is not connected.</p>
         </Card>
       </form>
     </Page>

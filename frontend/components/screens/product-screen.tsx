@@ -66,25 +66,25 @@ export function ProductScreen({ slug }: { slug: string }) {
   return (
     <Page>
     <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-      <article className="rounded-2xl bg-white p-5 sm:p-6">
+      <article className="rounded-2xl bg-card p-5 sm:p-6">
         {item.media?.[0] ? <img src={item.media[0].url} alt={item.media[0].alt ?? ''} className="mb-5 h-80 w-full rounded-2xl object-cover" /> : null}
-        <p className="text-sm uppercase tracking-wide text-[#163A70]">{item.manufacturer?.name}</p>
+        <p className="text-sm uppercase tracking-wide text-link">{item.manufacturer?.name}</p>
         <h1 className="display mt-2 text-4xl leading-[0.95] sm:text-5xl">{item.name}</h1>
-        {price ? <p className="mt-3 text-3xl text-[#F15A24]">{naira(price)}</p> : null}
+        {price ? <p className="mt-3 text-3xl text-accent">{naira(price)}</p> : null}
         <p className="mt-2 text-sm">{qty > 0 ? `${qty} available` : 'Out of stock'}</p>
         {item.description ? <p className="mt-4 leading-7">{item.description}</p> : null}
         {item.partNumbers?.length ? <p className="mt-4 text-sm">Numbers: {item.partNumbers.map((part) => `${part.type} ${part.number}`).join(' · ')}</p> : null}
-        <p className="mt-2 text-sm text-[#0E1B2C]/70">{item.condition ?? 'new'}{item.warrantyMonths ? ` · ${item.warrantyMonths} month warranty` : ''}{item.originCountry ? ` · origin ${item.originCountry}` : ''}</p>
+        <p className="mt-2 text-sm text-ink/70">{item.condition ?? 'new'}{item.warrantyMonths ? ` · ${item.warrantyMonths} month warranty` : ''}{item.originCountry ? ` · origin ${item.originCountry}` : ''}</p>
       </article>
       <aside className="space-y-4">
         <Card>
-          {vehicle && fitment.data ? <div className="mb-3"><FitmentBadge status={fitment.data.status} /><p className="mt-2 text-sm">{fitment.data.notes}</p></div> : <p className="mb-3 text-sm text-[#0E1B2C]/70">Select a vehicle to see whether this part is recorded as a fit.</p>}
+          {vehicle && fitment.data ? <div className="mb-3"><FitmentBadge status={fitment.data.status} /><p className="mt-2 text-sm">{fitment.data.notes}</p></div> : <p className="mb-3 text-sm text-ink/70">Select a vehicle to see whether this part is recorded as a fit.</p>}
           {message ? <div className="mb-3"><Notice>{message}</Notice></div> : null}
           <Button className="w-full" type="button" disabled={qty < 1 || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Adding…' : 'Add to cart'}</Button>
           <GhostButton className="mt-2 w-full" type="button" disabled={!token || save.isPending} onClick={() => save.mutate()}>{token ? 'Save to wishlist' : 'Sign in to save'}</GhostButton>
         </Card>
         {item.store ? (
-          <a href={`/stores/${item.store.slug}`} className="block rounded-2xl bg-[#163A70] p-5 text-white">
+          <a href={`/stores/${item.store.slug}`} className="block rounded-2xl bg-navy p-5 text-white">
             <p className="text-xs uppercase tracking-[0.16em] text-white/70">Sold by</p>
             <p className="display mt-1 text-3xl">{item.store.businessName}</p>
             <p className="mt-1 text-sm">{item.store.ratingCount ? `${item.store.ratingAvg} · ${item.store.ratingCount} ratings` : 'Visit the store'}</p>

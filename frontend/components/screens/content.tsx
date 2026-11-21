@@ -1,9 +1,9 @@
 export function Article({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 md:py-10">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">PROMEC Limited</p>
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">PROMEC Limited</p>
       <h1 className="display mt-1 text-4xl leading-[0.95] sm:text-5xl">{title}</h1>
-      <div className="mt-6 space-y-4 rounded-2xl bg-white p-5 leading-7 text-[#0E1B2C]/85 sm:p-6">{children}</div>
+      <div className="mt-6 space-y-4 rounded-2xl bg-card p-5 leading-7 text-ink/85 sm:p-6">{children}</div>
     </main>
   );
 }

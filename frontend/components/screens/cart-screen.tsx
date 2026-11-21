@@ -36,22 +36,22 @@ export function CartScreen() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Link href={`/products/${item.slug}`} className="font-medium">{item.name}</Link>
-                <p className="text-sm text-[#0E1B2C]/60">{item.sku}</p>
+                <p className="text-sm text-ink/60">{item.sku}</p>
                 {item.fitmentStatus ? <div className="mt-2"><FitmentBadge status={item.fitmentStatus} /></div> : null}
               </div>
-              <p className="text-[#F15A24]">{naira(item.lineTotal)}</p>
+              <p className="text-accent">{naira(item.lineTotal)}</p>
             </div>
             <div className="mt-3 flex items-center gap-2">
               <GhostButton type="button" className="px-4" onClick={() => change.mutate({ id: item.id, qty: Math.max(0, item.qty - 1) })} aria-label="Decrease quantity">−</GhostButton>
               <span className="min-w-6 text-center">{item.qty}</span>
               <GhostButton type="button" className="px-4" onClick={() => change.mutate({ id: item.id, qty: item.qty + 1 })} aria-label="Increase quantity">+</GhostButton>
-              <button type="button" className="ml-auto inline-flex min-h-11 items-center text-sm text-[#163A70]" onClick={() => change.mutate({ id: item.id, qty: 0 })}>Remove</button>
+              <button type="button" className="ml-auto inline-flex min-h-11 items-center text-sm text-link" onClick={() => change.mutate({ id: item.id, qty: 0 })}>Remove</button>
             </div>
           </Card>
         ))}
       </div>
       {items.length ? (
-        <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-[#0E1B2C] p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-panel p-5 text-white sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xl">Subtotal {naira(cart.data?.data.subtotal)}</p>
           <Link href="/checkout" className={primaryClass}>Checkout</Link>
         </div>

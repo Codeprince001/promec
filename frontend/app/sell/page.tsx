@@ -128,12 +128,12 @@ export default function SellPage() {
   return (
     <div>
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">Sell</p>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">Sell</p>
         <h1 className="display mt-1 text-4xl leading-[0.95] sm:text-5xl">Your store</h1>
-        <p className="mt-3 max-w-xl text-[#0E1B2C]/75">List parts for buyers on PROMEC. PROMEC publishes each part and pays your commission to the account you save here.</p>
-        {message ? <p className="mt-4 rounded-xl bg-white px-4 py-3">{message}</p> : null}
+        <p className="mt-3 max-w-xl text-ink/75">List parts for buyers on PROMEC. PROMEC publishes each part and pays your commission to the account you save here.</p>
+        {message ? <p className="mt-4 rounded-xl bg-card px-4 py-3">{message}</p> : null}
         {!token ? (
-          <form onSubmit={authenticate} className="mt-8 grid gap-3 rounded-3xl bg-white p-6">
+          <form onSubmit={authenticate} className="mt-8 grid gap-3 rounded-3xl bg-card p-6">
             <div className="flex gap-2">
               <button type="button" className={mode === 'login' ? tabOn : tabOff} onClick={() => setMode('login')}>Sign in</button>
               <button type="button" className={mode === 'register' ? tabOn : tabOff} onClick={() => setMode('register')}>Create account</button>
@@ -153,7 +153,7 @@ export default function SellPage() {
         ) : (
           <>
             {store ? (
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#163A70] px-5 py-4 text-white">
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-navy px-5 py-4 text-white">
                 <div>
                   <p className="text-sm text-white/70">Status · {store.status}</p>
                   <p className="text-lg font-semibold">{store.businessName}</p>
@@ -168,7 +168,7 @@ export default function SellPage() {
               </div>
             ) : null}
             {missing || store ? (
-              <form onSubmit={saveStore} className="mt-6 grid gap-3 rounded-3xl bg-white p-6">
+              <form onSubmit={saveStore} className="mt-6 grid gap-3 rounded-3xl bg-card p-6">
                 <h2 className="text-xl font-semibold">{missing ? 'Open a store' : 'Store profile'}</h2>
                 <Field label="Business name" value={form.businessName} onChange={(value) => setForm({ ...form, businessName: value })} required />
                 <Field label="Description" value={form.description} onChange={(value) => setForm({ ...form, description: value })} area />
@@ -211,6 +211,6 @@ function compact(form: typeof emptyForm) {
 }
 
 const field = 'control';
-const button = 'inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-5 text-sm font-medium text-white';
-const tabOn = 'inline-flex min-h-11 items-center rounded-full bg-[#163A70] px-4 text-sm text-white';
-const tabOff = 'inline-flex min-h-11 items-center rounded-full px-4 text-sm text-[#163A70]';
+const button = 'inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-medium text-white';
+const tabOn = 'inline-flex min-h-11 items-center rounded-full bg-navy px-4 text-sm text-white';
+const tabOff = 'inline-flex min-h-11 items-center rounded-full px-4 text-sm text-link';

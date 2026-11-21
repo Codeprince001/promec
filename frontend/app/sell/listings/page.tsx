@@ -42,8 +42,8 @@ export default function ListingsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <Link href="/sell" className="text-sm text-[#163A70]">Back to store</Link>
-      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">Sell</p>
+      <Link href="/sell" className="text-sm text-link">Back to store</Link>
+      <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-accent">Sell</p>
       <h1 className="display mt-1 text-4xl">Listings</h1>
       <p className="mt-2 text-sm">A listing stays in review until PROMEC publishes it. Buyers then see it on your store.</p>
       {message ? <p className="mt-3">{message}</p> : null}
@@ -60,9 +60,9 @@ export default function ListingsPage() {
         <input className="control" placeholder="Price in naira" value={form.sellingPrice} onChange={(event) => setForm({ ...form, sellingPrice: event.target.value })} required />
         <input className="control" placeholder="Quantity" value={form.stockQty} onChange={(event) => setForm({ ...form, stockQty: event.target.value })} required />
         <input className="control" placeholder="Part number" value={form.partNumber} onChange={(event) => setForm({ ...form, partNumber: event.target.value })} />
-        <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-5 text-sm font-medium text-white" type="submit">Submit listing</button>
+        <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-medium text-white" type="submit">Submit listing</button>
       </form>
-      <div className="mt-6 space-y-2">{(mine.data ?? []).map((item) => <p key={item.id} className="rounded-xl bg-white px-4 py-3">{item.name} · {item.status}</p>)}{mine.isError ? <p>{mine.error.message}</p> : null}</div>
+      <div className="mt-6 space-y-2">{(mine.data ?? []).map((item) => <p key={item.id} className="rounded-xl bg-card px-4 py-3">{item.name} · {item.status}</p>)}{mine.isError ? <p>{mine.error.message}</p> : null}</div>
     </main>
   );
 }

@@ -56,7 +56,7 @@ export function QuickOrderScreen() {
       setMessage(error instanceof Error ? error.message : 'Could not add the part');
     }
   }
-  return <Page width="3xl"><PageHead kicker="Trade" title="Quick order" lede="Find a published part and add the first SKU to the cart." /><form onSubmit={search} className="mt-6 flex flex-col gap-3 sm:flex-row"><Field className="sm:flex-1" value={q} onChange={(event) => setQ(event.target.value)} placeholder="SKU, name, or part number" /><button className={navyClass} type="submit">Find</button></form>{message ? <div className="mt-4"><Notice>{message}</Notice></div> : null}<div className="mt-4 space-y-2">{hits.map((hit) => <div key={hit.slug} className="flex min-h-11 items-center justify-between gap-3 rounded-2xl bg-white p-4"><span>{hit.name}</span><button className="inline-flex min-h-11 items-center text-sm text-[#F15A24]" type="button" onClick={() => hit.skus[0] && void add(hit.skus[0].id)}>Add</button></div>)}{searched && hits.length === 0 ? <Empty title="Nothing matched" body="No published part used that name or number." /> : null}</div></Page>;
+  return <Page width="3xl"><PageHead kicker="Trade" title="Quick order" lede="Find a published part and add the first SKU to the cart." /><form onSubmit={search} className="mt-6 flex flex-col gap-3 sm:flex-row"><Field className="sm:flex-1" value={q} onChange={(event) => setQ(event.target.value)} placeholder="SKU, name, or part number" /><button className={navyClass} type="submit">Find</button></form>{message ? <div className="mt-4"><Notice>{message}</Notice></div> : null}<div className="mt-4 space-y-2">{hits.map((hit) => <div key={hit.slug} className="flex min-h-11 items-center justify-between gap-3 rounded-2xl bg-card p-4"><span>{hit.name}</span><button className="inline-flex min-h-11 items-center text-sm text-accent" type="button" onClick={() => hit.skus[0] && void add(hit.skus[0].id)}>Add</button></div>)}{searched && hits.length === 0 ? <Empty title="Nothing matched" body="No published part used that name or number." /> : null}</div></Page>;
 }
 
 export function QuotesScreen() {
@@ -84,7 +84,7 @@ export function QuotesScreen() {
       <PageHead kicker="Trade" title="Quotes" lede="A quote starts as a draft. PROMEC approves it before it can become an order. This page keeps the quotes you create in this browser." />
       <form onSubmit={create} className="mt-6 grid gap-3"><Field placeholder="Part description" value={description} onChange={(event) => setDescription(event.target.value)} required /><Field type="number" min={1} value={qty} onChange={(event) => setQty(Number(event.target.value))} /><Button type="submit">Create draft</Button></form>
       {message ? <div className="mt-4"><Notice>{message}</Notice></div> : null}
-      <div className="mt-4 space-y-3">{quotes.map((quote) => <article key={quote.id} className="rounded-2xl bg-white p-4"><p className="font-medium">{quote.quoteNo} · {quote.status}</p>{quote.status === 'draft' ? <button className="mt-2 inline-flex min-h-11 items-center text-sm text-[#163A70]" type="button" onClick={() => void submit(quote.id)}>Submit for review</button> : null}{quote.status === 'approved' ? <Link className="mt-2 inline-flex min-h-11 items-center text-sm text-[#F15A24]" href={`/business/quotes/${quote.id}`}>Turn into an order</Link> : null}</article>)}{quotes.length === 0 ? <Empty title="No quotes in this browser" body="Create a draft and PROMEC prices it. Older quotes are not listed by the customer API." /> : null}</div>
+      <div className="mt-4 space-y-3">{quotes.map((quote) => <article key={quote.id} className="rounded-2xl bg-card p-4"><p className="font-medium">{quote.quoteNo} · {quote.status}</p>{quote.status === 'draft' ? <button className="mt-2 inline-flex min-h-11 items-center text-sm text-link" type="button" onClick={() => void submit(quote.id)}>Submit for review</button> : null}{quote.status === 'approved' ? <Link className="mt-2 inline-flex min-h-11 items-center text-sm text-accent" href={`/business/quotes/${quote.id}`}>Turn into an order</Link> : null}</article>)}{quotes.length === 0 ? <Empty title="No quotes in this browser" body="Create a draft and PROMEC prices it. Older quotes are not listed by the customer API." /> : null}</div>
     </Page>
   );
 }
@@ -117,5 +117,5 @@ function CreditPanel() {
       setText(`Account ${credit.status ?? 'open'}${credit.available ? ` · available ${naira(credit.available)}` : ''}`);
     }).catch(() => setText('Trade credit appears after PROMEC approves the account.'));
   }, []);
-  return <p className="mt-6 rounded-2xl border border-[#C4A574]/40 bg-white p-4 text-sm">{text}</p>;
+  return <p className="mt-6 rounded-2xl border border-gold/40 bg-card p-4 text-sm">{text}</p>;
 }

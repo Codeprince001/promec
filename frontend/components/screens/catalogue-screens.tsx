@@ -46,9 +46,9 @@ export function CategoriesScreen() {
       {categories.isError ? <div className="mt-4"><Notice>{categories.error.message}</Notice></div> : null}
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(categories.data ?? []).map((category) => (
-          <Link key={category.id} className="rounded-2xl border border-[#C4A574]/30 bg-white px-5 py-6 transition hover:border-[#F15A24]" href={`/categories/${category.slug}`}>
-            <p className="text-xs uppercase tracking-[0.16em] text-[#F15A24]">Shop</p>
-            <p className="display mt-2 text-3xl text-[#163A70]">{category.name}</p>
+          <Link key={category.id} className="rounded-2xl border border-gold/30 bg-card px-5 py-6 transition hover:border-brand" href={`/categories/${category.slug}`}>
+            <p className="text-xs uppercase tracking-[0.16em] text-accent">Shop</p>
+            <p className="display mt-2 text-3xl text-link">{category.name}</p>
           </Link>
         ))}
       </div>
@@ -72,8 +72,8 @@ export function BrandsScreen() {
       {products.isError ? <div className="mt-4"><Notice>{products.error.message}</Notice></div> : null}
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {names.map((name) => (
-          <Link key={name} className="rounded-2xl border border-[#C4A574]/30 bg-white px-5 py-6 transition hover:border-[#F15A24]" href={`/brands/${slugifyName(name)}`}>
-            <p className="display text-3xl text-[#163A70]">{name}</p>
+          <Link key={name} className="rounded-2xl border border-gold/30 bg-card px-5 py-6 transition hover:border-brand" href={`/brands/${slugifyName(name)}`}>
+            <p className="display text-3xl text-link">{name}</p>
           </Link>
         ))}
       </div>
@@ -161,7 +161,7 @@ export function TrackScreen() {
         <Field className="sm:flex-1" value={no} onChange={(event) => setNo(event.target.value)} placeholder="Tracking number" />
         <Button type="submit">Track</Button>
       </form>
-      {result ? <pre className="mt-4 overflow-auto rounded-2xl bg-white p-4 text-sm">{result}</pre> : null}
+      {result ? <pre className="mt-4 overflow-auto rounded-2xl bg-card p-4 text-sm">{result}</pre> : null}
     </Page>
   );
 }

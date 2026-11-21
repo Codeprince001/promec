@@ -61,11 +61,11 @@ export default function WithdrawalsPage() {
   return (
     <div>
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <a href="/sell" className="inline-flex min-h-11 items-center text-sm text-[#163A70]">Back to store</a>
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">Sell</p>
+        <a href="/sell" className="inline-flex min-h-11 items-center text-sm text-link">Back to store</a>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">Sell</p>
         <h1 className="display mt-1 text-4xl">Withdrawals</h1>
         {!token ? <p className="mt-6">Sign in from the store page first.</p> : null}
-        {message ? <p className="mt-4 rounded-xl bg-white px-4 py-3">{message}</p> : null}
+        {message ? <p className="mt-4 rounded-xl bg-card px-4 py-3">{message}</p> : null}
         {balance ? (
           <section className="mt-6 grid gap-3 sm:grid-cols-3">
             <Stat label="Available" value={naira(balance.available)} />
@@ -74,21 +74,21 @@ export default function WithdrawalsPage() {
           </section>
         ) : null}
         {token ? (
-          <form onSubmit={request} className="mt-6 flex flex-wrap items-end gap-3 rounded-3xl bg-white p-6">
+          <form onSubmit={request} className="mt-6 flex flex-wrap items-end gap-3 rounded-3xl bg-card p-6">
             <label className="grid gap-1 text-sm">
               Amount in naira
               <input className="control" value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" required />
             </label>
-            <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#F15A24] px-5 text-sm font-medium text-white" type="submit">Request withdrawal</button>
-            <p className="w-full text-sm text-[#0E1B2C]/70">The smallest request is ₦1,000. It uses the payout account saved on the store, and it stays reserved until PROMEC pays or rejects it.</p>
+            <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-medium text-white" type="submit">Request withdrawal</button>
+            <p className="w-full text-sm text-ink/70">The smallest request is ₦1,000. It uses the payout account saved on the store, and it stays reserved until PROMEC pays or rejects it.</p>
           </form>
         ) : null}
         <div className="mt-6 space-y-3">
           {rows.map((row) => (
-            <article key={row.id} className="rounded-2xl bg-white p-4">
+            <article key={row.id} className="rounded-2xl bg-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-lg font-semibold">{naira(row.amount)}</p>
-                <p className="text-sm uppercase tracking-wide text-[#163A70]">{row.status}</p>
+                <p className="text-sm uppercase tracking-wide text-link">{row.status}</p>
               </div>
               <p className="mt-2 text-sm">{row.bankName} · {row.accountName} · {row.accountNumber}</p>
               {row.reference ? <p className="mt-1 text-sm">Reference {row.reference}</p> : null}
@@ -102,7 +102,7 @@ export default function WithdrawalsPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-[#163A70] p-4 text-white">
+    <div className="rounded-2xl bg-navy p-4 text-white">
       <p className="text-sm text-white/70">{label}</p>
       <p className="mt-1 text-xl font-semibold">{value}</p>
     </div>

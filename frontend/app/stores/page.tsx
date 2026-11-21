@@ -17,15 +17,15 @@ export default function StoreList() {
   return (
     <div>
       <main className="mx-auto max-w-6xl px-4 py-10">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#F15A24]">Marketplace</p>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">Marketplace</p>
         <h1 className="display mt-1 text-4xl leading-[0.95] sm:text-5xl">Stores</h1>
-        <p className="mt-3 max-w-2xl text-[#0E1B2C]/75">Approved sellers list parts on PROMEC. Open a store to see what they stock, where they are, and how buyers rate them.</p>
+        <p className="mt-3 max-w-2xl text-ink/75">Approved sellers list parts on PROMEC. Open a store to see what they stock, where they are, and how buyers rate them.</p>
         {error ? <p className="mt-8">{error}</p> : null}
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {stores.map((store) => (
-            <a key={store.slug} href={`/stores/${store.slug}`} className="rounded-2xl bg-white p-5 shadow-sm">
+            <a key={store.slug} href={`/stores/${store.slug}`} className="rounded-2xl bg-card p-5 shadow-sm">
               <p className="text-xl font-semibold">{store.businessName}</p>
-              <p className="mt-1 text-sm text-[#0E1B2C]/70">
+              <p className="mt-1 text-sm text-ink/70">
                 {store.ratingCount > 0 ? `${store.ratingAvg} · ${store.ratingCount} ratings` : 'No ratings yet'}
                 {' · '}
                 {shipsFrom(store.fulfilmentMode)}
@@ -34,7 +34,7 @@ export default function StoreList() {
             </a>
           ))}
         </div>
-        {!error && stores.length === 0 ? <p className="mt-8 text-[#0E1B2C]/70">No approved stores yet.</p> : null}
+        {!error && stores.length === 0 ? <p className="mt-8 text-ink/70">No approved stores yet.</p> : null}
       </main>
     </div>
   );
